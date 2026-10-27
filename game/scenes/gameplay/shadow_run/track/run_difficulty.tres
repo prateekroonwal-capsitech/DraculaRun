@@ -1,10 +1,6 @@
-[gd_resource type="Resource" script_class="RunDifficulty" format=3]
+[gd_resource type="Resource" script_class="RunDifficulty" format=3 uid="uid://djbjdm2wkjege"]
 
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/RunDifficulty.gd" id="1_diff"]
-
-[sub_resource type="Curve" id="Curve_speed"]
-_data = [Vector2(0, 0), 0.0, 1.6, 0, 0, Vector2(1, 1), 0.6, 0.0, 0, 0]
-point_count = 2
+[ext_resource type="Script" uid="uid://dgj81ctyn6waj" path="res://game/scenes/gameplay/shadow_run/track/RunDifficulty.gd" id="1_diff"]
 
 [sub_resource type="Curve" id="Curve_maxdiff"]
 _data = [Vector2(0, 0.05), 0.0, 0.0, 0, 0, Vector2(0.1, 0.25), 1.5, 1.5, 0, 0, Vector2(0.6, 0.75), 0.8, 0.8, 0, 0, Vector2(1, 1), 0.4, 0.0, 0, 0]
@@ -13,6 +9,10 @@ point_count = 4
 [sub_resource type="Curve" id="Curve_obstacles"]
 _data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.15, 0.12), 0.7, 0.7, 0, 0, Vector2(1, 0.6), 0.35, 0.0, 0, 0]
 point_count = 3
+
+[sub_resource type="Curve" id="Curve_speed"]
+_data = [Vector2(0, 0), 0.0, 1.6, 0, 0, Vector2(1, 1), 0.6, 0.0, 0, 0]
+point_count = 2
 
 [sub_resource type="Curve" id="Curve_sundelta"]
 _data = [Vector2(0, 0.25), 0.0, 0.0, 0, 0, Vector2(1, 0.9), 0.5, 0.0, 0, 0]
@@ -24,4 +24,3 @@ speed_curve = SubResource("Curve_speed")
 max_difficulty_curve = SubResource("Curve_maxdiff")
 obstacle_density_curve = SubResource("Curve_obstacles")
 sun_delta_curve = SubResource("Curve_sundelta")
-max_sun_delta = 140.0
