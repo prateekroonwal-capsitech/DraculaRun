@@ -40,6 +40,40 @@ content_margin_top = 10.0
 content_margin_right = 24.0
 content_margin_bottom = 10.0
 
+[sub_resource type="StyleBoxFlat" id="Style_toggle_off"]
+bg_color = Color(0.16, 0.05, 0.09, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.04, 0.08, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 24.0
+content_margin_top = 10.0
+content_margin_right = 24.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_toggle_on"]
+bg_color = Color(0.62, 0.08, 0.12, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.86, 0.5, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 24.0
+content_margin_top = 10.0
+content_margin_right = 24.0
+content_margin_bottom = 10.0
+
+[sub_resource type="ButtonGroup" id="Group_sun"]
+
 [node name="PausePanel" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -83,6 +117,53 @@ theme_override_colors/font_color = Color(1, 0.86, 0.5, 1)
 theme_override_font_sizes/font_size = 76
 text = "PAUSED"
 horizontal_alignment = 1
+
+[node name="SunModeLabel" type="Label" parent="Center/Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
+theme_override_font_sizes/font_size = 40
+text = "Sun control"
+horizontal_alignment = 1
+
+[node name="SunMode" type="HBoxContainer" parent="Center/Panel/VBox"]
+editor_description = "Two-option switch (ButtonGroup): Joystick / Slider. Saved via SaveManager by ShadowRunFeature."
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="JoystickToggle" type="Button" parent="Center/Panel/VBox/SunMode"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.86, 0.5, 0.75)
+theme_override_colors/font_pressed_color = Color(1, 0.95, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 0.95, 0.82, 1)
+theme_override_font_sizes/font_size = 40
+theme_override_styles/normal = SubResource("Style_toggle_off")
+theme_override_styles/hover = SubResource("Style_toggle_off")
+theme_override_styles/pressed = SubResource("Style_toggle_on")
+theme_override_styles/hover_pressed = SubResource("Style_toggle_on")
+toggle_mode = true
+button_group = SubResource("Group_sun")
+text = "Joystick"
+
+[node name="SliderToggle" type="Button" parent="Center/Panel/VBox/SunMode"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.86, 0.5, 0.75)
+theme_override_colors/font_pressed_color = Color(1, 0.95, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 0.95, 0.82, 1)
+theme_override_font_sizes/font_size = 40
+theme_override_styles/normal = SubResource("Style_toggle_off")
+theme_override_styles/hover = SubResource("Style_toggle_off")
+theme_override_styles/pressed = SubResource("Style_toggle_on")
+theme_override_styles/hover_pressed = SubResource("Style_toggle_on")
+toggle_mode = true
+button_group = SubResource("Group_sun")
+text = "Slider"
 
 [node name="Buttons" type="HBoxContainer" parent="Center/Panel/VBox"]
 layout_mode = 2

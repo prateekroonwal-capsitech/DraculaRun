@@ -126,8 +126,11 @@ func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
 	_index = 0
 
 ## Follow `points` (world positions, first = the first cell to step into).
-## hops[i] = true makes the step into points[i] a hop.
-func follow_path(points: PackedVector3Array, hops: Array[bool]) -> void:
+## hops[i] = true makes the step into points[i] a hop. `run` forces run speed
+## (drag-to-move); otherwise long paths run and short ones walk.
+## Calling it while moving re-routes in place: speed and heading carry over, so
+## frequent re-paths (drag-to-move) stay smooth.
+func follow_path(points: PackedVector3Array, hops: Array[bool], run: bool = false) -> void:
 	if _state != State.ACTIVE or points.is_empty():
 		return
 	var length := 0.0
@@ -135,13 +138,20 @@ func follow_path(points: PackedVector3Array, hops: Array[bool]) -> void:
 	for p in points:
 		length += prev.distance_to(p)
 		prev = p
-	_speed = run_speed if length > run_threshold else walk_speed
+	_speed = run_speed if run or length > run_threshold else walk_speed
 	if not is_moving():
 		_cur_speed = 0.0   # re-routes keep their momentum
 	_points = points
 	_hops = hops
 	_index = 0
 	_begin_segment()
+
+## True while a hop is still ahead on the current path (or under way).
+func has_pending_hop() -> bool:
+	for i in range(_index, _hops.size()):
+		if _hops[i]:
+			return true
+	return false
 
 ## Stop at the next waypoint (used when a sun drag starts mid-move).
 func stop_at_next_waypoint() -> void:

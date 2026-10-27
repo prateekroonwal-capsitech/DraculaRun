@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/GameOverPanel.tscn" id="10_gameover"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/PausePanel.tscn" id="11_pause"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/Backdrop.tscn" id="13_backdrop"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/fx/TapMarker.tscn" id="14_tap"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/fx/MoveMarker.tscn" id="14_tap"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.96, 0.74, 0.46, 1)
@@ -36,7 +36,7 @@ tonemap_mode = 0
 [node name="ShadowRun" type="Node3D"]
 editor_description = "Shared gameplay shell. Every levels/LevelNN.tscn instances this as its 'Game' child and sets Game/ShadowRunFeature.level to its root."
 
-[node name="ShadowRunFeature" type="Node" parent="." node_paths=PackedStringArray("dracula", "sun_rig", "sensor", "run_camera", "hud", "debug_overlay", "tap_marker")]
+[node name="ShadowRunFeature" type="Node" parent="." node_paths=PackedStringArray("dracula", "sun_rig", "sensor", "run_camera", "hud", "debug_overlay", "move_marker")]
 script = ExtResource("1_feature")
 dracula = NodePath("../Dracula")
 sun_rig = NodePath("../SunRig")
@@ -44,7 +44,7 @@ sensor = NodePath("../ShadowSensor")
 run_camera = NodePath("../RunCamera")
 hud = NodePath("../HUDLayer/ShadowRunHUD")
 debug_overlay = NodePath("../DebugOverlay")
-tap_marker = NodePath("../TapMarker")
+move_marker = NodePath("../MoveMarker")
 level_complete_panel = ExtResource("9_complete")
 game_over_panel = ExtResource("10_gameover")
 pause_panel = ExtResource("11_pause")
@@ -64,7 +64,7 @@ script = ExtResource("5_sensor")
 [node name="Backdrop" parent="." node_paths=PackedStringArray("follow_target") instance=ExtResource("13_backdrop")]
 follow_target = NodePath("../Dracula")
 
-[node name="TapMarker" parent="." instance=ExtResource("14_tap")]
+[node name="MoveMarker" parent="." instance=ExtResource("14_tap")]
 
 [node name="DebugOverlay" parent="." instance=ExtResource("7_debug")]
 

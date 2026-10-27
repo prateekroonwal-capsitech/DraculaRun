@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/fx/TapMarker.gd" id="1_tap"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/fx/MoveMarker.gd" id="1_tap"]
 [ext_resource type="Material" path="res://game/assets/materials/tap_ok.tres" id="2_ok"]
 [ext_resource type="Material" path="res://game/assets/materials/tap_fail.tres" id="3_fail"]
 
@@ -10,7 +10,8 @@ outer_radius = 0.42
 rings = 24
 ring_segments = 4
 
-[node name="TapMarker" type="Node3D" node_paths=PackedStringArray("ring")]
+[node name="MoveMarker" type="Node3D" node_paths=PackedStringArray("ring")]
+editor_description = "The yellow ring for tap AND drag moves: glides under the drag target, pulses and fades where Dracula will stop."
 script = ExtResource("1_tap")
 ring = NodePath("Ring")
 ok_material = ExtResource("2_ok")

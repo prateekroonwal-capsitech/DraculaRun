@@ -1,0 +1,154 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/ui/mfw/SunJoystick.gd" id="1_joy"]
+
+[sub_resource type="StyleBoxFlat" id="Style_base"]
+bg_color = Color(0.07, 0.04, 0.08, 0.78)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(1, 0.86, 0.55, 0.45)
+corner_radius_top_left = 130
+corner_radius_top_right = 130
+corner_radius_bottom_right = 130
+corner_radius_bottom_left = 130
+corner_detail = 16
+
+[sub_resource type="StyleBoxFlat" id="Style_guide"]
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.86, 0.55, 0.22)
+corner_radius_top_left = 92
+corner_radius_top_right = 92
+corner_radius_bottom_right = 92
+corner_radius_bottom_left = 92
+corner_detail = 16
+
+[sub_resource type="StyleBoxFlat" id="Style_blocked"]
+draw_center = false
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0.9, 0.12, 0.1, 0.9)
+corner_radius_top_left = 130
+corner_radius_top_right = 130
+corner_radius_bottom_right = 130
+corner_radius_bottom_left = 130
+corner_detail = 16
+
+[sub_resource type="StyleBoxFlat" id="Style_knob"]
+bg_color = Color(1, 0.8, 0.28, 1)
+corner_radius_top_left = 62
+corner_radius_top_right = 62
+corner_radius_bottom_right = 62
+corner_radius_bottom_left = 62
+corner_detail = 16
+shadow_color = Color(1, 0.72, 0.18, 0.45)
+shadow_size = 22
+
+[sub_resource type="StyleBoxFlat" id="Style_core"]
+bg_color = Color(1, 0.97, 0.82, 1)
+corner_radius_top_left = 34
+corner_radius_top_right = 34
+corner_radius_bottom_right = 34
+corner_radius_bottom_left = 34
+corner_detail = 12
+
+[node name="SunJoystick" type="Control" node_paths=PackedStringArray("body", "knob", "blocked_rim")]
+editor_description = "Sun joystick (bottom-right; left_handed mirrors it). Size = custom_minimum_size + offsets (260 px). Feel: max_speed, deadzone, response_exponent, knob_travel. Look: the StyleBoxes on Base / Guide / BlockedRim / Knob / KnobCore."
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -308.0
+offset_top = -308.0
+offset_right = -48.0
+offset_bottom = -48.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("1_joy")
+body = NodePath("Body")
+knob = NodePath("Body/Knob")
+blocked_rim = NodePath("Body/BlockedRim")
+
+[node name="Body" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Base" type="Panel" parent="Body"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_base")
+
+[node name="Guide" type="Panel" parent="Body"]
+editor_description = "Knob travel guide (radius ≈ knob_travel)."
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -92.0
+offset_top = -92.0
+offset_right = 92.0
+offset_bottom = 92.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_guide")
+
+[node name="BlockedRim" type="Panel" parent="Body"]
+editor_description = "Flashes when the exposure guard refuses a sun move."
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_blocked")
+
+[node name="Knob" type="Panel" parent="Body"]
+editor_description = "The sun knob. Positioned by the script (centre + deflection)."
+layout_mode = 0
+offset_left = 68.0
+offset_top = 68.0
+offset_right = 192.0
+offset_bottom = 192.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_knob")
+
+[node name="KnobCore" type="Panel" parent="Body/Knob"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -34.0
+offset_top = -34.0
+offset_right = 34.0
+offset_bottom = 34.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_core")

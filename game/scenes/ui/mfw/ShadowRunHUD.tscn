@@ -1,8 +1,8 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://game/scenes/ui/mfw/ShadowRunHUD.gd" id="1_hud"]
-[ext_resource type="Script" path="res://game/scenes/ui/mfw/ExposureMeter.gd" id="2_meter"]
-[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunControl.tscn" id="3_sun"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunJoystick.tscn" id="3_sun"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunControl.tscn" id="5_strip"]
 [ext_resource type="Shader" path="res://game/assets/shaders/burn_vignette.gdshader" id="4_vig"]
 
 [sub_resource type="ShaderMaterial" id="Mat_vignette"]
@@ -61,7 +61,7 @@ mouse_filter = 2
 theme_override_constants/separation = 0
 
 [node name="TopBar" type="MarginContainer" parent="SafeArea/Layout"]
-editor_description = "~10% of the screen: pause, distance, exposure meter."
+editor_description = "~10% of the screen: pause button and level name."
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 10.0
@@ -100,20 +100,12 @@ text = "1 · Level"
 text_overrun_behavior = 3
 vertical_alignment = 1
 
-[node name="ExposureMeter" type="Control" parent="SafeArea/Layout/TopBar/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(400, 116)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-script = ExtResource("2_meter")
-
 [node name="PlayView" type="Control" parent="SafeArea/Layout"]
 unique_name_in_owner = true
-editor_description = "~75%: the level shows through here. Taps here move Dracula. Keep it free of UI except transient labels."
+editor_description = "The level shows through here. Joystick mode: down to the bottom edge (ratio play_view_ratio_joystick). Slider mode: ends above the SunControl strip (play_view_ratio_slider). Taps / drags here move Dracula (except on the SunJoystick). Keep it free of UI except transient labels."
 layout_mode = 2
 size_flags_vertical = 3
-size_flags_stretch_ratio = 75.0
+size_flags_stretch_ratio = 90.0
 mouse_filter = 2
 
 [node name="HintLabel" type="Label" parent="SafeArea/Layout/PlayView"]
@@ -163,8 +155,18 @@ theme_override_font_sizes/font_size = 28
 flat = true
 text = "dbg"
 
-[node name="SunControl" parent="SafeArea/Layout" instance=ExtResource("3_sun")]
+[node name="SunControl" parent="SafeArea/Layout" instance=ExtResource("5_strip")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 15.0
+
+[node name="Overlay" type="Control" parent="SafeArea"]
+editor_description = "Free-floating controls over the play view, inside the safe area."
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunJoystick" parent="SafeArea/Overlay" instance=ExtResource("3_sun")]
+unique_name_in_owner = true
+layout_mode = 1

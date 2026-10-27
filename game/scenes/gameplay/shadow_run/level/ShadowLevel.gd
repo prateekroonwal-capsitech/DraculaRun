@@ -25,6 +25,9 @@ extends Node3D
 ## Low = long shadows, high = short shadows.
 @export_range(10.0, 80.0) var elevation_min: float = 15.0
 @export_range(10.0, 80.0) var elevation_max: float = 65.0
+## Design floor checked by LevelValidatorRunner: the fewest sun adjustments a solution
+## may need (1 = the sun must be used at all; raise it for harder levels).
+@export_range(1, 6) var min_sun_adjustments: int = 1
 
 @export_group("Scene parts")
 @export var start: Marker3D

@@ -4,7 +4,7 @@ extends Node3D
 ## SunRig — owns the DirectionalLight3D and the sun's angular state.
 ## Azimuth swings the sun across the level (negative = left / −X, positive = right / +X,
 ## 0 = straight ahead down −Z); elevation sets shadow length (low = long). Both ranges
-## come from the level (ShadowLevel). SunControl only sets a *target*; the rig moves
+## come from the level (ShadowLevel). SunJoystick only sets a *target*; the rig moves
 ## toward it with a capped, smoothed angular speed.
 ##
 ## Exposure guard: when `guard` is set (Callable(dir: Vector3) -> bool, "is Dracula

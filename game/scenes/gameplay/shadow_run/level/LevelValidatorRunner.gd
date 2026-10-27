@@ -5,8 +5,11 @@ extends Node3D
 ## Add `-- --verbose=1` to print level 1's walkable map at a few sun azimuths (at the
 ## start elevation, or `--el=<deg>`)
 ## ('o' walkable shade, '.' sunlit, '#' solid, 'S' start, 'G' goal).
-## A level PASSES when it is solvable, needs at least one sun adjustment, and is not
-## trivial (one sun sweep from the start spot must not connect straight to the goal).
+## A level PASSES when it is solvable, needs at least `min_sun_adjustments` sun
+## adjustments (ShadowLevel export), is not trivial (one sun sweep from the start spot
+## must not connect straight to the goal), and every needed sun angle has a comfortable
+## window (≥ min_window_degrees on azimuth or elevation). The report lists one solution
+## step by step. Debug tool only: never part of gameplay.
 ## Exit code 0 = all levels pass. Each level is loaded WITHOUT its gameplay shell
 ## ("Game" child is removed before it enters the tree), so nothing boots.
 
@@ -15,6 +18,16 @@ extends Node3D
 @export var logger: Node
 @export var quit_when_done: bool = true
 @export var verbose_level: int = 0
+## Run only this level number (0 = all). `--only=N`.
+@export var only_level: int = 0
+## Experiment: `--range=az_min,az_max,el_min,el_max` overrides the sun ranges of the level(s).
+var range_override: PackedFloat32Array = PackedFloat32Array()
+## Experiments: `--start=az,el`, `--set=Node/Path:x:z;…` (moves nodes), `--hide=Node/Path;…`.
+var start_override: PackedFloat32Array = PackedFloat32Array()
+var set_overrides: Dictionary = {}
+var hide_overrides: PackedStringArray = PackedStringArray()
+## Smallest acceptable tolerance window for each needed sun angle, degrees.
+@export var min_window_degrees: float = 8.0
 ## Extra sun azimuths to dump (besides min / start / max) and the row step.
 @export var dump_azimuths: PackedFloat32Array = PackedFloat32Array([0.0])
 @export var dump_row_step: int = 2
@@ -31,6 +44,19 @@ func _ready() -> void:
 			dump_elevation = float(arg.trim_prefix("--el="))
 		elif arg.begins_with("--rows="):
 			dump_row_step = int(arg.trim_prefix("--rows="))
+		elif arg.begins_with("--only="):
+			only_level = int(arg.trim_prefix("--only="))
+		elif arg.begins_with("--start="):
+			start_override = PackedFloat32Array(Array(arg.trim_prefix("--start=").split(",")).map(func(v): return float(v)))
+		elif arg.begins_with("--set="):
+			# --set=Props/pillar_6:x:z (repeatable, ';'-separated) moves a node for layout experiments.
+			for item in arg.trim_prefix("--set=").split(";"):
+				var parts := item.split(":")
+				set_overrides[parts[0]] = Vector2(float(parts[1]), float(parts[2]))
+		elif arg.begins_with("--hide="):
+			hide_overrides = arg.trim_prefix("--hide=").split(";")
+		elif arg.begins_with("--range="):
+			range_override = PackedFloat32Array(Array(arg.trim_prefix("--range=").split(",")).map(func(v): return float(v)))
 	_run.call_deferred()
 
 func _run() -> void:
@@ -41,19 +67,48 @@ func _run() -> void:
 		if game:
 			level.remove_child(game)
 			game.free()
+		if only_level > 0 and level.level_number != only_level:
+			level.free()
+			continue
+		if range_override.size() == 4:
+			level.azimuth_min = range_override[0]
+			level.azimuth_max = range_override[1]
+			level.elevation_min = range_override[2]
+			level.elevation_max = range_override[3]
+		if start_override.size() == 2:
+			level.sun_start_azimuth = start_override[0]
+			level.sun_start_elevation = start_override[1]
+		for node_path in set_overrides:
+			var n := level.get_node_or_null(NodePath(node_path)) as Node3D
+			if n:
+				n.position = Vector3(set_overrides[node_path].x, n.position.y, set_overrides[node_path].y)
+			else:
+				logger.warn("no node %s" % node_path)
+		for node_path in hide_overrides:
+			var n := level.get_node_or_null(NodePath(node_path))
+			if n:
+				n.get_parent().remove_child(n)
+				n.free()
 		add_child(level)
 		await get_tree().physics_frame
 		await get_tree().physics_frame
 		level.grid.build_static()
 		var t0 := Time.get_ticks_msec()
 		var r := solver.solve(level)
-		var ok: bool = r.solvable and r.needs_sun and String(r.get("trivial", "")) == ""
+		var narrowest := INF
+		for w in r.windows:
+			narrowest = minf(narrowest, maxf(w.azimuth_span, w.elevation_span))
+		var comfortable: bool = narrowest >= min_window_degrees
+		var ok: bool = r.solvable and r.needs_sun and String(r.trivial) == "" 			and r.adjustments >= level.min_sun_adjustments and comfortable
 		if not ok:
 			failed += 1
-		logger.info("%s Level %d '%s': solvable=%s needs_sun=%s trivial=%s sun_steps=%d plan_steps=%d (%d ms) %s" % [
-			"PASS" if ok else "FAIL", level.level_number, level.level_title, str(r.solvable), str(r.needs_sun),
-			String(r.get("trivial", "")) if String(r.get("trivial", "")) != "" else "no",
-			r.sun_steps, (r.plan as Array).size(), Time.get_ticks_msec() - t0, r.error])
+		logger.info("%s Level %d '%s': solvable=%s min_sun_adjustments=%d (need >= %d) trivial=%s narrowest_window=%.1f° (%d angles, %d ms) %s" % [
+			"PASS" if ok else "FAIL", level.level_number, level.level_title, str(r.solvable), r.adjustments,
+			level.min_sun_adjustments, String(r.trivial) if String(r.trivial) != "" else "no",
+			narrowest if r.solvable else 0.0, r.angles, Time.get_ticks_msec() - t0, r.error])
+		logger.info("  start: az %.1f° el %.1f°, Dracula on cell %s" % [level.sun_start_azimuth, level.sun_start_elevation, str(r.get("start_cell", ""))])
+		for i in (r.steps as Array).size():
+			logger.info("  %d. %s" % [i + 1, r.steps[i]])
 		if level.level_number == verbose_level:
 			_dump(level)
 		level.queue_free()

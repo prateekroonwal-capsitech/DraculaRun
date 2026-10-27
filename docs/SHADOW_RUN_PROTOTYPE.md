@@ -29,6 +29,10 @@ godot --headless --path . res://game/scenes/gameplay/shadow_run/level/LevelValid
 godot --headless --path . res://game/scenes/gameplay/shadow_run/level/LevelValidatorRunner.tscn -- --verbose=3 --az=-30,0 --rows=1
 ```
 
+Layout experiments (debug only, never saved): `--only=3` runs one level;
+`--range=az_min,az_max,el_min,el_max`, `--start=az,el`, `--set=Props/pillar_6:x:z;…`
+and `--hide=Props/name;…` try variations without editing the scene.
+
 ```bash
 godot --headless --path . res://game/scenes/gameplay/shadow_run/shadow/ShadowSensorSelfCheck.tscn
 ```
@@ -59,14 +63,36 @@ normal flow), and is the only place in gameplay code that touches `ServiceRegist
 
 | Action | Touch | Desktop |
 |---|---|---|
-| Move Dracula | **Tap** a spot in the play view | Left-click |
-| Turn the sun (azimuth) | **Drag horizontally** in the bottom sun strip | Q / E (or mouse-drag in the strip) |
-| Raise / lower the sun (elevation) | **Drag vertically** in the strip (up = short shadows, down = long) | R / F |
+| Move Dracula | **Tap** a spot, or **press and drag** to lead him | Click / click-drag |
+| Turn the sun (azimuth) | **Joystick** (default): push the sun knob left / right. **Slider**: drag horizontally in the bottom strip | Q / E (both modes) |
+| Raise / lower the sun (elevation) | **Joystick**: push up = higher sun, short shadows. **Slider**: drag vertically in the strip | R / F (both modes) |
+| Switch sun control | Pause → **Sun control: Joystick / Slider** (saved) | Same |
 | Pause | ‖ button (top-left) | Esc or P |
 | Debug overlay | Optional "dbg" button (off by default) | F3 (debug builds only) |
 
-**Tap to move.** A tap is a press that moves less than `tap_slop` (30 px) within
-`tap_max_time` (0.45 s).
+**Tap or drag to move.** A press in the play view becomes a **drag** once it moves more
+than `drag_start_distance` (25 px on the 1080-wide canvas) or is held longer than
+`drag_start_time` (0.15 s); otherwise it is a **tap**. Click = tap and click-drag = drag
+on desktop. Only the first finger in the play view leads Dracula. Touches that start on
+the active sun control (joystick or strip) always belong to the sun.
+
+**Drag to move.** While the finger is down, Dracula runs after the cell under it,
+re-pathing up to `drag_repath_rate` (12) times a second, and only when that cell
+changes. Walking paths during a drag never hop. When the finger is over sunlight, a wall
+or a shadow he can't walk to, he heads for the closest cell of his own shadow and waits
+there. That cell is chosen with `edge_penalty` (2 cells per lit neighbour), so he stands
+a step inside the shadow rather than on its sunny edge. To hop a small gap
+(≤ `max_hop_distance`), hold the finger over the far shade for `drag_hop_hold_time`
+(0.2 s). The same yellow ring as a tap (`fx/MoveMarker.tscn`) glides under the cell he
+is heading to (never under a sunlit finger) and, on release, plays the tap's pulse and
+fade on his final stop. On release:
+over reachable shade, that cell (nudged off the edge) is his final stop; otherwise he
+finishes at the last valid cell and shakes his head. Starting a sun drag stops him at
+the next cell; he resumes following when the sun is released and the finger is still
+down. There is no camera pan, so nothing else competes with one-finger drags.
+Re-path cost (snap search + walking A*) is about 2 ms for a 24 m path on desktop.
+
+**Tap results.**
 
 - **Reachable** (a shaded cell connected to Dracula's shadow region, hops included): he
   runs the A* path at 8 m/s (walks at 5 m/s if it's 2 m or shorter). He accelerates at
@@ -78,26 +104,47 @@ normal flow), and is the only place in gameplay code that touches `ServiceRegist
 - **During a sun drag** taps are ignored. A tap made while the shade is still updating is
   held and answered within a few frames.
 
-**Sun.** Relative drag: touching never jumps the sun. Horizontal drag sets azimuth;
-vertical drag sets elevation, shown by the sun's height in the strip (the guide arc
-stays fixed; the sun sits above it when high and below it when low). Drag sensitivity is 1.5× and the sun follows the finger at up to 180°/s. While the
-sun is being dragged, Dracula stops at the next cell and stands still.
+**Sun: two controls, one interface.** `SunJoystick` (bottom-right, default) and the
+`SunControl` slider strip both implement `SunInput` and only move the SunRig's target, so
+ranges (per level), the 180°/s cap, smoothing, the guard and shade-grid syncing are
+identical. Exactly one is shown; the Pause panel switch swaps them instantly and saves
+`sun_control_mode` (see *Saved setting*).
+
+- **Joystick (rate control).** Knob deflection sets the turning *speed*:
+  `speed = max_speed × ((d − deadzone) / (1 − deadzone))^response_exponent`, with
+  `max_speed` 180°/s, `deadzone` 0.1, `response_exponent` 2.2 (a 30% push turns about
+  5°/s for fine work, full push 180°/s). X = azimuth, up = higher sun. Releasing springs
+  the knob back and the sun stops where it is (the target never leads the sun by more
+  than `max_lead_degrees`, 6°). The base is 260 px; `left_handed` mirrors it bottom-left.
+- **Slider (position control).** Relative drag in the bottom strip: horizontal = azimuth,
+  vertical = elevation, sensitivity 1.5×; the guide arc stays fixed and the sun icon
+  rises above it for a high sun.
+
+While the sun is moving, by either control or the keys, Dracula stops at the next cell
+and stands still.
 
 **Exposure guard.** The sun cannot be turned to an angle that would put Dracula's
-footprint in sunlight. It stops at the last safe angle, the strip shakes with a red edge,
-and Dracula flinches. Dragging the sun alone can never burn him.
+footprint in sunlight. It stops at the last safe angle, the active control flashes red
+(joystick rim / strip edge) and Dracula flinches (at most every 0.4 s while a held
+joystick keeps pushing). Moving the sun alone can never burn him.
 
 **Goal connection.** No outline is drawn on shadow edges during gameplay. When the shadow
 region Dracula stands in reaches the goal, a soft glow ring lights up at the crypt door.
 The region itself is only visualised by the F3 debug overlay.
 
-**Touch arbitration.** Touches that start in the sun strip belong to the sun until they
-lift. They are consumed before the play view sees them, so a sun drag is never a tap and
-two fingers work at once.
+**Touch arbitration.** Touches that start on the active sun control belong to the sun
+until they lift. They are consumed before the play view sees them, so a sun move is never
+a tap and two fingers work at once (one on the sun, one leading Dracula). A hidden control
+ignores all input, keys included.
+
+**Saved setting.** `ShadowRunFeature` reads `sun_control_mode` (`"joystick"` /
+`"slider"`) from the injected `SaveManager` at level start (`get_value`, default
+`default_sun_mode` = joystick), and the Pause switch writes it with `set_value` +
+`save_game()`, so it carries across levels and restarts.
 
 ## Failure
 
-The exposure meter is a safety net driven by `ShadowSensor`: three foot-level points on
+Exposure (no on-screen bar) is a safety net driven by `ShadowSensor`: three foot-level points on
 Dracula ray-cast toward the sun. It rises whenever he is exposed, for example mid-hop, and
 recovers in shade. At 100 the burn → ash-and-bats death plays, then Game Over
 (Retry / Home). All burn feedback is kept: smoke and embers, the emissive rim, the screen
@@ -238,9 +285,13 @@ width is visible but less depth ahead.
 
 **Layout** (portrait 1080×1920, `canvas_items` / `expand`, locked portrait, safe-area padding):
 
-1. **Top bar, 10%:** pause, level label, exposure meter.
-2. **Play view, 75%:** taps happen here; nothing covers it except transient labels.
-3. **Sun strip, 15%.**
+1. **Top bar, 10%:** pause, level label (no exposure bar; exposure only drives the burn vignette).
+2. **Play view:** taps and drags happen here; nothing covers it except transient labels
+   and, in joystick mode, the joystick. Joystick mode: 90%, down to the bottom edge
+   (camera `distance` 3.6 m). Slider mode: 75%, ending above the strip (camera 5.5 m).
+   Either way Dracula sits in the lower-middle of the visible play view.
+3. **Joystick mode:** 260 px `SunJoystick` floating 48 px in from the bottom-right safe
+   corner. **Slider mode:** the `SunControl` strip, bottom 15%.
 
 ## Debug overlay (F3, off by default)
 
@@ -259,14 +310,16 @@ Rendered shadows and green/blue cells must coincide; captures confirmed they do.
 | `LevelNN` root (`ShadowLevel`) | `sun_start_azimuth`, `sun_start_elevation`, `azimuth_min` / `azimuth_max` (−80/80), `elevation_min` / `elevation_max` (15/65), `hint`, `next_level` |
 | `LevelNN/ShadeGrid` | `size`, `cell_size`, `sample_height`, `max_hop_distance`, `hop_penalty`, `solid_probe_heights`, `mask_samples`, `mask_elevation_samples`, `rays_per_frame`, `settle_rays_per_frame`, `max_updates_per_second` |
 | `Game/SunRig` (`sun/SunRig.tscn`) | `max_azimuth_speed` / `max_elevation_speed` (180 °/s), `smoothing` (22), `min_follow_speed` (60), `settle_threshold`, `guard_search_steps`, sun colour and energy; light shadow settings |
-| `Game/HUDLayer/…/SunControl` | strip height via `size_flags_stretch_ratio` on `ShadowRunHUD.tscn` (15, play view 75), `drag_sensitivity` (1.5), `key_azimuth_speed` / `key_elevation_speed` (180 °/s), `elevation_drag_span`, `elevation_travel`, `sun_radius`, arc shape, blocked shake and colour |
-| `Game/HUDLayer/ShadowRunHUD` | `show_debug_button` (off; debug builds only), `min_safe_margin` |
+| `Game/HUDLayer/…/SunJoystick` (`ui/mfw/SunJoystick.tscn`) | `max_speed` 180 °/s, `deadzone` 0.1, `response_exponent` 2.2, `knob_travel` 92 px, `max_lead_degrees` 6, `return_time`, key speeds 180 °/s, `left_handed`, `corner_margin` 48, `grab_slop` 24; size 260 px (`custom_minimum_size` + offsets); look in the StyleBoxes |
+| `Game/HUDLayer/…/SunControl` (slider strip) | strip height via its `size_flags_stretch_ratio` (15), `drag_sensitivity` (1.5), key speeds (180 °/s), `elevation_drag_span`, `elevation_travel`, `sun_radius`, arc shape, blocked shake and colour |
+| `Game/HUDLayer/ShadowRunHUD` | `play_view_ratio_joystick` 90 / `play_view_ratio_slider` 75, `show_debug_button` (off; debug builds only), `min_safe_margin` |
 | `Game/Dracula` (`player/Dracula.tscn`) | `walk_speed` 5, `run_speed` 8, `run_threshold` 2 m, `acceleration` 45 m/s², `hop_time` 0.3 s, `hop_height`, `turn_speed` 22 rad/s, `bob_cycles_per_meter` (bob scales with speed), burn and death timings, cue angles |
 | `Game/ShadowSensor` | `burn_rate` (100/1.2 per s), `heal_rate`, `ray_length` |
-| `Game/ShadowRunFeature` | `tap_slop`, `tap_max_time`, `title_time`, F6 fallback |
+| `Game/ShadowRunFeature` | Touch: `drag_start_distance` 25 px, `drag_start_time` 0.15 s, `drag_repath_rate` 12/s, `drag_hop_hold_time` 0.2 s, `edge_penalty` 2. Sun control: `default_sun_mode` (Joystick), `camera_distance_joystick` 3.6, `camera_distance_slider` 5.5. `title_time`, F6 fallback |
 | `Game/RunCamera` | `height`, `distance`, `pitch_degrees`, `fov`, `forward_smoothing`, death cam |
-| `Game/TapMarker` | Colours, pulse time |
-| `level/level_solver.tres` | `azimuth_samples` (21), `elevation_samples` (6), `goal_radius` |
+| `Game/MoveMarker` (`fx/MoveMarker.tscn`) | Ring size, `tap_ok` / `tap_fail` materials, `pulse_time`, `start_scale`, drag `follow_rate` |
+| `level/level_solver.tres` | `angle_step` (2.5°), `check_midpoints` (off), `goal_radius`, `max_adjustments` (8) |
+| `LevelValidatorRunner.tscn` | `min_window_degrees` (8°); per level: `ShadowLevel.min_sun_adjustments` |
 
 ## Verification done
 

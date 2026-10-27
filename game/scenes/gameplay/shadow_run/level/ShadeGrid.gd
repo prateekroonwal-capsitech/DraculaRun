@@ -80,6 +80,7 @@ var _last_sweep_start: float = -100.0
 var _clock: float = 0.0
 var _hop_cells: int = 0
 var _budget: int = 300
+var _walk_labels: PackedInt32Array = PackedInt32Array()   # walking-only regions, cached per shade pass
 
 func _ready() -> void:
 	_query = PhysicsRayQueryParameters3D.new()
@@ -171,6 +172,7 @@ func refresh_now() -> void:
 	var space := get_world_3d().direct_space_state
 	for i in _variable:
 		_shaded[i] = 1 if _ray_shaded(space, i, dir) else 0
+	_walk_labels = PackedInt32Array()
 	shade_updated.emit()
 
 func _physics_process(delta: float) -> void:
@@ -191,7 +193,25 @@ func _physics_process(delta: float) -> void:
 	_sweep_pos = end
 	if _sweep_pos >= _variable.size():
 		_sweep_pos = -1
+		_walk_labels = PackedInt32Array()
 		shade_updated.emit()
+
+## Tools (LevelSolver): build the variable-cell mask for these sun ranges without a SunRig,
+## exactly as setup() does, so compute_walkable_fast() matches the in-game shade.
+func prepare_variable_mask(az_min: float, az_max: float, el_min: float, el_max: float) -> void:
+	_build_variable_mask(az_min, az_max, el_min, el_max)
+
+## Walkable mask for a sun direction, re-casting only the variable cells (same truth the
+## game uses). Call prepare_variable_mask() first.
+func compute_walkable_fast(dir: Vector3) -> PackedByteArray:
+	var space := get_world_3d().direct_space_state
+	var out := PackedByteArray()
+	out.resize(cell_count())
+	for i in cell_count():
+		out[i] = 1 if _solid[i] == 0 and _shaded[i] != 0 else 0
+	for i in _variable:
+		out[i] = 1 if _ray_shaded(space, i, dir) else 0
+	return out
 
 ## Shade test for an arbitrary sun direction (used by the level validator).
 func compute_walkable_for(dir: Vector3) -> PackedByteArray:
@@ -277,7 +297,7 @@ const _DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
 
 ## Neighbours of a walkable cell: [cell, cost, is_hop] triples.
-func _neighbours(c: Vector2i, walkable: Callable) -> Array:
+func _neighbours(c: Vector2i, walkable: Callable, include_hops: bool = true) -> Array:
 	var out := []
 	for d in _DIRS:
 		var n := c + d
@@ -286,7 +306,7 @@ func _neighbours(c: Vector2i, walkable: Callable) -> Array:
 		if d.x != 0 and d.y != 0 and (not walkable.call(c + Vector2i(d.x, 0)) or not walkable.call(c + Vector2i(0, d.y))):
 			continue   # no corner cutting past sunlight / walls
 		out.append([n, d.length(), false])
-	if _hop_cells >= 2:
+	if include_hops and _hop_cells >= 2:
 		for d in _DIRS:
 			for k in range(2, _hop_cells + 1):
 				var n := c + d * k
@@ -308,10 +328,12 @@ func _neighbours(c: Vector2i, walkable: Callable) -> Array:
 ## A* from `from` to `to` over walkable cells (+ hops). Returns
 ## {"cells": Array[Vector2i], "hops": Array[bool]} (hops[i] = the step INTO cells[i]
 ## is a hop), or an empty Dictionary when unreachable.
-func find_path(from: Vector2i, to: Vector2i) -> Dictionary:
+func find_path(from: Vector2i, to: Vector2i, include_hops: bool = true) -> Dictionary:
 	var walk := Callable(self, "is_walkable")
 	if not is_walkable(from) or not is_walkable(to):
 		return {}
+	if not include_hops:
+		return _find_walk_path(from, to)
 	var n := cell_count()
 	var g := PackedFloat32Array()
 	g.resize(n)
@@ -338,7 +360,7 @@ func find_path(from: Vector2i, to: Vector2i) -> Dictionary:
 		closed[cur] = 1
 		@warning_ignore("integer_division")
 		var c := Vector2i(cur % cols, cur / cols)
-		for nb in _neighbours(c, walk):
+		for nb in _neighbours(c, walk, include_hops):
 			var ni := index_of(nb[0])
 			if closed[ni] != 0:
 				continue
@@ -359,29 +381,188 @@ func find_path(from: Vector2i, to: Vector2i) -> Dictionary:
 		i = parent[i]
 	return {"cells": cells, "hops": hops}
 
-## Connected-region labels for an arbitrary walkable mask (walking + hops).
-## Returns one label per cell (-1 = not walkable). Used by LevelSolver.
-func label_regions(mask: PackedByteArray) -> PackedInt32Array:
-	var labels := PackedInt32Array()
-	labels.resize(cell_count())
-	labels.fill(-1)
-	var walk := func(c: Vector2i) -> bool: return in_bounds(c) and mask[index_of(c)] != 0
-	var next_label := 0
-	for i in cell_count():
-		if mask[i] == 0 or labels[i] >= 0:
+const _DX: PackedInt32Array = [1, -1, 0, 0, 1, 1, -1, -1]
+const _DY: PackedInt32Array = [0, 0, 1, -1, 1, -1, 1, -1]
+
+## Walking-only A* (drag-to-move re-paths ~12×/s): same moves and costs as find_path
+## without hops, but with the neighbour test inlined on the packed arrays and an
+## octile heuristic, so long paths stay cheap on mobile.
+func _find_walk_path(from: Vector2i, to: Vector2i) -> Dictionary:
+	var n := cell_count()
+	var g := PackedFloat32Array()
+	g.resize(n)
+	g.fill(1.0e9)
+	var parent := PackedInt32Array()
+	parent.resize(n)
+	parent.fill(-1)
+	var closed := PackedByteArray()
+	closed.resize(n)
+	var heap_f := PackedFloat32Array()
+	var heap_i := PackedInt32Array()
+	var start := index_of(from)
+	var goal := index_of(to)
+	g[start] = 0.0
+	_heap_push(heap_f, heap_i, _octile(from.x - to.x, from.y - to.y), start)
+	while heap_i.size() > 0:
+		var cur := _heap_pop(heap_f, heap_i)
+		if closed[cur] != 0:
 			continue
+		if cur == goal:
+			break
+		closed[cur] = 1
+		var cx := cur % cols
 		@warning_ignore("integer_division")
-		var stack: Array[Vector2i] = [Vector2i(i % cols, i / cols)]
-		labels[i] = next_label
-		while not stack.is_empty():
-			var c: Vector2i = stack.pop_back()
-			for nb in _neighbours(c, walk):
-				var ni := index_of(nb[0])
-				if labels[ni] < 0:
-					labels[ni] = next_label
-					stack.append(nb[0])
+		var cy := cur / cols
+		var gc := g[cur]
+		for k in 8:
+			var nx := cx + _DX[k]
+			var ny := cy + _DY[k]
+			if nx < 0 or ny < 0 or nx >= cols or ny >= rows:
+				continue
+			var ni := ny * cols + nx
+			if closed[ni] != 0 or _shaded[ni] == 0 or _solid[ni] != 0:
+				continue
+			if k >= 4:
+				var a := cy * cols + nx
+				var b := ny * cols + cx
+				if _shaded[a] == 0 or _solid[a] != 0 or _shaded[b] == 0 or _solid[b] != 0:
+					continue   # no corner cutting past sunlight / walls
+			var ng := gc + (1.4142136 if k >= 4 else 1.0)
+			if ng < g[ni]:
+				g[ni] = ng
+				parent[ni] = cur
+				_heap_push(heap_f, heap_i, ng + _octile(nx - to.x, ny - to.y), ni)
+	if parent[goal] < 0 and goal != start:
+		return {}
+	var cells: Array[Vector2i] = []
+	var hops: Array[bool] = []
+	var i := goal
+	while i != start:
+		@warning_ignore("integer_division")
+		cells.push_front(Vector2i(i % cols, i / cols))
+		hops.push_front(false)
+		i = parent[i]
+	return {"cells": cells, "hops": hops}
+
+static func _octile(dx: int, dy: int) -> float:
+	var ax := absi(dx)
+	var ay := absi(dy)
+	return float(maxi(ax, ay)) + 0.4142136 * float(mini(ax, ay))
+
+## Connected-region labels for an arbitrary walkable mask (walking + hops unless
+## include_hops is false). Returns one label per cell (-1 = not walkable). Same moves as
+## _neighbours(), inlined on the packed arrays: LevelSolver labels ~1400 sun angles.
+func label_regions(mask: PackedByteArray, include_hops: bool = true) -> PackedInt32Array:
+	var n := cell_count()
+	var labels := PackedInt32Array()
+	labels.resize(n)
+	labels.fill(-1)
+	var hop_cells := _hop_cells if include_hops else 0
+	var max_hop_sq := (max_hop_distance + 0.001) * (max_hop_distance + 0.001) / (cell_size * cell_size)
+	var stack := PackedInt32Array()
+	var next_label := 0
+	for i0 in n:
+		if mask[i0] == 0 or labels[i0] >= 0:
+			continue
+		labels[i0] = next_label
+		stack.append(i0)
+		while stack.size() > 0:
+			var cur := stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
+			var cx := cur % cols
+			@warning_ignore("integer_division")
+			var cy := cur / cols
+			for k in 8:
+				var dx := _DX[k]
+				var dy := _DY[k]
+				var nx := cx + dx
+				var ny := cy + dy
+				var near_ok := nx >= 0 and ny >= 0 and nx < cols and ny < rows and mask[ny * cols + nx] != 0
+				if near_ok and k >= 4 and (mask[cy * cols + nx] == 0 or mask[ny * cols + cx] == 0):
+					near_ok = false   # no corner cutting
+				if near_ok:
+					var ni := ny * cols + nx
+					if labels[ni] < 0:
+						labels[ni] = next_label
+						stack.append(ni)
+				if hop_cells < 2:
+					continue
+				var first_open := nx >= 0 and ny >= 0 and nx < cols and ny < rows and mask[ny * cols + nx] != 0
+				for m in range(2, hop_cells + 1):
+					var hx := cx + dx * m
+					var hy := cy + dy * m
+					if hx < 0 or hy < 0 or hx >= cols or hy >= rows:
+						break
+					var blocked := false
+					for j in range(1, m):
+						if _solid[(cy + dy * j) * cols + cx + dx * j] != 0:
+							blocked = true
+							break
+					if blocked:
+						break
+					var hi := hy * cols + hx
+					if mask[hi] != 0 and not first_open:
+						if float(dx * dx + dy * dy) * m * m <= max_hop_sq and labels[hi] < 0:
+							labels[hi] = next_label
+							stack.append(hi)
+						break
 		next_label += 1
 	return labels
+
+## Region label of every cell for the CURRENT shade, walking only (no hops); -1 = not
+## walkable. Cached until the next shade pass, so drag-to-move can query it every repath.
+func walk_labels() -> PackedInt32Array:
+	if _walk_labels.is_empty() and cols > 0:
+		var mask := PackedByteArray()
+		mask.resize(cell_count())
+		for i in cell_count():
+			mask[i] = 1 if _shaded[i] != 0 and _solid[i] == 0 else 0
+		_walk_labels = label_regions(mask, false)
+	return _walk_labels
+
+## Lit, open neighbours of a cell (0..8; out of bounds counts as lit). A shaded cell with
+## lit neighbours sits on the shadow edge, where Dracula's footprint can catch sun.
+func lit_neighbours(c: Vector2i) -> int:
+	var n := 0
+	for d in _DIRS:
+		var m := c + d
+		if not in_bounds(m) or (_shaded[index_of(m)] == 0 and _solid[index_of(m)] == 0):
+			n += 1
+	return n
+
+## The best cell with region label `label` for a `target` that may be out of bounds, lit,
+## solid or in another region: cost = distance in cells + edge_penalty per lit neighbour,
+## so a waiting Dracula stands a step inside the shadow instead of on its sunny edge.
+## Square rings grow until no cheaper cell is possible. (-1, -1) if none.
+func nearest_with_label(target: Vector2i, labels: PackedInt32Array, label: int, edge_penalty: float = 0.0) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	if label < 0:
+		return best
+	var best_cost := INF
+	for r in cols + rows:
+		if float(r) > best_cost:
+			break
+		var ring: Array[Vector2i] = []
+		for k in range(-r, r + 1):
+			ring.append(Vector2i(k, -r))
+			if r > 0:
+				ring.append(Vector2i(k, r))
+		for k in range(-r + 1, r):
+			ring.append(Vector2i(-r, k))
+			ring.append(Vector2i(r, k))
+		for o in ring:
+			var n := target + o
+			if not in_bounds(n) or labels[index_of(n)] != label:
+				continue
+			var cost := Vector2(o).length()
+			if cost >= best_cost:
+				continue
+			if edge_penalty > 0.0:
+				cost += edge_penalty * lit_neighbours(n)
+			if cost < best_cost:
+				best = n
+				best_cost = cost
+	return best
 
 ## Flood fill of every cell reachable from `from` (walking + hops).
 ## Returns a byte mask (1 = reachable).

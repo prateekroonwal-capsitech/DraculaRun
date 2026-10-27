@@ -1,7 +1,8 @@
 class_name SunControl
-extends UIController
+extends SunInput
 
-## SunControl — the sun widget in the bottom strip.
+## SunControl — the sun SLIDER strip at the bottom of the screen (SunInput "slider" mode;
+## the joystick is the other mode, switched in the Pause panel).
 ##
 ## A shallow arc seen "from the front", like the sky ahead of Dracula:
 ##   * horizontal drag = AZIMUTH (sun left ↔ right)
@@ -18,9 +19,6 @@ extends UIController
 ## Dracula stands still while the sun moves. When the SunRig's exposure guard refuses
 ## a move, play_blocked() shakes the widget and flashes its edge red.
 ## The strip only sets the SunRig *target*; the rig enforces max speed and the guard.
-
-signal drag_started
-signal drag_ended
 
 ## Sun icon radius in px (>= 70 → icon >= 140 px wide).
 @export var sun_radius: float = 70.0
@@ -47,7 +45,6 @@ signal drag_ended
 @export var guide_color: Color = Color(1.0, 0.86, 0.55, 0.35)
 @export var sun_color: Color = Color(1.0, 0.8, 0.28, 1.0)
 
-var _sun: SunRig
 var _owned_touches: Dictionary = {}   # touch index (-1 = mouse) -> grab anchor {pos, az, el}
 var _enabled: bool = true
 var _key_dragging: bool = false
@@ -76,6 +73,31 @@ func set_controls_enabled(enabled: bool) -> void:
 func is_dragging() -> bool:
 	return not _owned_touches.is_empty() or _key_dragging
 
+func contains(viewport_pos: Vector2) -> bool:
+	return is_visible_in_tree() and _is_inside(viewport_pos)
+
+## Test hooks: the same grab / move / release path a finger takes (mouse index).
+func press_at(viewport_pos: Vector2) -> void:
+	if _enabled and _sun and contains(viewport_pos) and not _owned_touches.has(-1):
+		_begin_drag(-1, viewport_pos)
+
+func move_to(viewport_pos: Vector2) -> void:
+	if _owned_touches.has(-1):
+		_drag_to(-1, viewport_pos)
+
+func release() -> void:
+	if _owned_touches.has(-1):
+		_end_drag(-1)
+
+## Viewport position that maps to (azimuth, elevation) for a grab made at `grab_pos`
+## while the target was (grab_az, grab_el) — the inverse of _drag_to(). For tests.
+func finger_for(grab_pos: Vector2, grab_az: float, grab_el: float, azimuth: float, elevation: float) -> Vector2:
+	var span_x := maxf(1.0, size.x - 2.0 * side_margin)
+	var span_y := maxf(1.0, size.y * elevation_drag_span)
+	var dx := (azimuth - grab_az) / ((_sun.azimuth_max - _sun.azimuth_min) * drag_sensitivity) * span_x
+	var dy := -(elevation - grab_el) / ((_sun.elevation_max - _sun.elevation_min) * drag_sensitivity) * span_y
+	return grab_pos + get_global_transform_with_canvas().basis_xform(Vector2(dx, dy))
+
 ## The guard refused a sun move: shake + red edge glow.
 func play_blocked() -> void:
 	if _fx_tween and _fx_tween.is_valid():
@@ -92,7 +114,7 @@ func _exit_tree() -> void:
 # ── Input ─────────────────────────────────────────────────────────────────
 
 func _input(event: InputEvent) -> void:
-	if not _enabled or _sun == null:
+	if not _enabled or _sun == null or not is_visible_in_tree():   # hidden mode never reads input
 		return
 	if event is InputEventKey:
 		if event.is_action("sun_left") or event.is_action("sun_right") or event.is_action("sun_up") or event.is_action("sun_down"):
