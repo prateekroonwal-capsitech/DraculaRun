@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://c5q4tg3hghs2l"]
 
-[ext_resource type="Script" uid="uid://cnfg1d6cpskfu" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_level"]
-[ext_resource type="Script" uid="uid://chx30tfrxneem" path="res://game/scenes/gameplay/shadow_run/level/ShadeGrid.gd" id="2_grid"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_level"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/ShadeGrid.gd" id="2_grid"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/ShadowRun.tscn" id="3_game"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/goal/CryptDoor.tscn" id="4_goal"]
 [ext_resource type="Material" path="res://game/assets/materials/ground_ochre.tres" id="5_ground"]
@@ -90,3 +90,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.5, 0, -32)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.6, 0, -9)
 
 [node name="Game" parent="." unique_id=79143881 instance=ExtResource("3_game")]
+
+[node name="ShadowRunFeature" parent="Game" node_paths=PackedStringArray("level")]
+level = NodePath("../..")

@@ -89,6 +89,8 @@ func initialize(dependencies: Dictionary) -> void:
 	_haptics = dependencies.get("haptics") as HapticsManager
 	_bus = dependencies.get("bus") as Node
 	_logger = dependencies.get("logger") as Node
+	if level == null:
+		level = _find_ancestor_level()   # editor re-saves can drop the Game/ShadowRunFeature.level override
 	if _game == null or _scene == null or _ui == null or _bus == null or level == null:
 		push_error("ShadowRunFeature: missing required dependency (game/scene/ui/bus/level)")
 		return
@@ -101,6 +103,14 @@ func _ready() -> void:
 	_ray_query = PhysicsRayQueryParameters3D.new()
 	if editor_f6_fallback and OS.has_feature("editor"):
 		_editor_fallback_boot.call_deferred()
+
+func _find_ancestor_level() -> ShadowLevel:
+	var node := get_parent()
+	while node:
+		if node is ShadowLevel:
+			return node as ShadowLevel
+		node = node.get_parent()
+	return null
 
 # ── Setup ─────────────────────────────────────────────────────────────────
 
