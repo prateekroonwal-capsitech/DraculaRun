@@ -3,91 +3,56 @@
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/ShadowRunFeature.gd" id="1_feature"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/sun/SunRig.tscn" id="2_sun"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/Dracula.tscn" id="3_dracula"]
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/TrackSpawner.gd" id="4_spawner"]
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/shadow/ShadowSensor.gd" id="5_sensor"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/camera/CameraRig.tscn" id="6_camera"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/debug/ShadowDebugOverlay.tscn" id="7_debug"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/ShadowRunHUD.tscn" id="8_hud"]
-[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/run_difficulty.tres" id="9_diff"]
-[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/lane_config.tres" id="14_lanes"]
-[ext_resource type="Material" path="res://game/assets/materials/road_cobbles.tres" id="15_road"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/LevelCompletePanel.tscn" id="9_complete"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/GameOverPanel.tscn" id="10_gameover"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/PausePanel.tscn" id="11_pause"]
-[ext_resource type="AudioStream" path="res://game/assets/audio/sfx/countdown_blip.wav" id="12_blip"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/Backdrop.tscn" id="13_backdrop"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_gate_start.tscn" id="s0"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_left_row.tscn" id="s1"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_right_row.tscn" id="s2"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_sun_swing.tscn" id="s3"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_arcade.tscn" id="s4"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_banners.tscn" id="s5"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_wagon.tscn" id="s6"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_courtyard_gap.tscn" id="s7"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_ruins_slalom.tscn" id="s8"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/segments/seg_towers_narrow.tscn" id="s9"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/fx/TapMarker.tscn" id="14_tap"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
-sky_top_color = Color(0.24, 0.27, 0.5, 1)
-sky_horizon_color = Color(0.98, 0.72, 0.42, 1)
-sky_curve = 0.12
-ground_bottom_color = Color(0.1, 0.08, 0.1, 1)
-ground_horizon_color = Color(0.62, 0.45, 0.33, 1)
-sun_angle_max = 18.0
-sun_curve = 0.08
+sky_top_color = Color(0.96, 0.74, 0.46, 1)
+sky_horizon_color = Color(1, 0.6, 0.32, 1)
+sky_curve = 0.2
+ground_bottom_color = Color(0.2, 0.12, 0.14, 1)
+ground_horizon_color = Color(0.85, 0.5, 0.3, 1)
+sun_angle_max = 8.0
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("Sky_mat")
 
 [sub_resource type="Environment" id="Env_1"]
-resource_local_to_scene = true
 background_mode = 2
 sky = SubResource("Sky_1")
 ambient_light_source = 2
-ambient_light_color = Color(0.36, 0.36, 0.68, 1)
-ambient_light_energy = 0.6
+ambient_light_color = Color(0.24, 0.13, 0.19, 1)
+ambient_light_energy = 0.55
 reflected_light_source = 1
-tonemap_mode = 2
-tonemap_white = 1.4
-glow_enabled = true
-glow_intensity = 0.5
-glow_bloom = 0.04
-fog_enabled = true
-fog_light_color = Color(0.62, 0.48, 0.58, 1)
-fog_density = 0.0045
-fog_sky_affect = 0.25
+tonemap_mode = 0
 
 [node name="ShadowRun" type="Node3D"]
+editor_description = "Shared gameplay shell. Every levels/LevelNN.tscn instances this as its 'Game' child and sets Game/ShadowRunFeature.level to its root."
 
-[node name="ShadowRunFeature" type="Node" parent="." node_paths=PackedStringArray("dracula", "sun_rig", "sensor", "spawner", "run_camera", "hud", "debug_overlay")]
+[node name="ShadowRunFeature" type="Node" parent="." node_paths=PackedStringArray("dracula", "sun_rig", "sensor", "run_camera", "hud", "debug_overlay", "tap_marker")]
 script = ExtResource("1_feature")
 dracula = NodePath("../Dracula")
 sun_rig = NodePath("../SunRig")
 sensor = NodePath("../ShadowSensor")
-spawner = NodePath("../TrackSpawner")
 run_camera = NodePath("../RunCamera")
 hud = NodePath("../HUDLayer/ShadowRunHUD")
 debug_overlay = NodePath("../DebugOverlay")
-difficulty = ExtResource("9_diff")
+tap_marker = NodePath("../TapMarker")
+level_complete_panel = ExtResource("9_complete")
 game_over_panel = ExtResource("10_gameover")
 pause_panel = ExtResource("11_pause")
-countdown_sfx = ExtResource("12_blip")
-hint_times = PackedFloat32Array(0.3, 3, 6.5, 13)
-hint_texts = PackedStringArray("Swipe the road (or A/D) to change lanes", "Sun on the left = shade on the left. Stay in it!", "Buildings switch sides: drag the sun RIGHT in the strip below (E)", "Swing the sun as the walls change sides")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_1")
 
-[node name="SunRig" parent="." node_paths=PackedStringArray("world_environment") instance=ExtResource("2_sun")]
-world_environment = NodePath("../WorldEnvironment")
-start_azimuth = -45.0
-start_elevation = 36.0
-
-[node name="TrackSpawner" type="Node3D" parent="."]
-script = ExtResource("4_spawner")
-lanes = ExtResource("14_lanes")
-road_material = ExtResource("15_road")
-active_count = 7
-segment_scenes = Array[PackedScene]([ExtResource("s0"), ExtResource("s1"), ExtResource("s2"), ExtResource("s3"), ExtResource("s4"), ExtResource("s5"), ExtResource("s6"), ExtResource("s7"), ExtResource("s8"), ExtResource("s9")])
+[node name="SunRig" parent="." instance=ExtResource("2_sun")]
 
 [node name="Dracula" parent="." instance=ExtResource("3_dracula")]
 
@@ -96,12 +61,12 @@ script = ExtResource("5_sensor")
 
 [node name="RunCamera" parent="." instance=ExtResource("6_camera")]
 
-
 [node name="Backdrop" parent="." node_paths=PackedStringArray("follow_target") instance=ExtResource("13_backdrop")]
 follow_target = NodePath("../Dracula")
 
+[node name="TapMarker" parent="." instance=ExtResource("14_tap")]
+
 [node name="DebugOverlay" parent="." instance=ExtResource("7_debug")]
-lanes = ExtResource("14_lanes")
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]
 layer = -1

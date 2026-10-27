@@ -88,15 +88,16 @@ theme_override_styles/hover = SubResource("Style_pause")
 theme_override_styles/pressed = SubResource("Style_pause")
 text = "II"
 
-[node name="DistanceLabel" type="Label" parent="SafeArea/Layout/TopBar/Row"]
+[node name="LevelLabel" type="Label" parent="SafeArea/Layout/TopBar/Row"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
 theme_override_colors/font_outline_color = Color(0.08, 0.03, 0.08, 1)
 theme_override_constants/outline_size = 14
-theme_override_font_sizes/font_size = 68
-text = "0 m"
+theme_override_font_sizes/font_size = 46
+text = "1 · Level"
+text_overrun_behavior = 3
 vertical_alignment = 1
 
 [node name="ExposureMeter" type="Control" parent="SafeArea/Layout/TopBar/Row"]
@@ -108,10 +109,11 @@ mouse_filter = 2
 script = ExtResource("2_meter")
 
 [node name="PlayView" type="Control" parent="SafeArea/Layout"]
-editor_description = "~68%: the 3D road shows through here. Touches starting here are lane swipes. Keep it free of UI except transient labels."
+unique_name_in_owner = true
+editor_description = "~75%: the level shows through here. Taps here move Dracula. Keep it free of UI except transient labels."
 layout_mode = 2
 size_flags_vertical = 3
-size_flags_stretch_ratio = 68.0
+size_flags_stretch_ratio = 75.0
 mouse_filter = 2
 
 [node name="HintLabel" type="Label" parent="SafeArea/Layout/PlayView"]
@@ -129,7 +131,7 @@ theme_override_font_sizes/font_size = 44
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="CountdownLabel" type="Label" parent="SafeArea/Layout/PlayView"]
+[node name="TitleLabel" type="Label" parent="SafeArea/Layout/PlayView"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
@@ -142,8 +144,8 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
 theme_override_colors/font_outline_color = Color(0.25, 0.02, 0.05, 1)
 theme_override_constants/outline_size = 24
-theme_override_font_sizes/font_size = 180
-text = "3"
+theme_override_font_sizes/font_size = 120
+text = "LEVEL 1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -165,4 +167,4 @@ text = "dbg"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-size_flags_stretch_ratio = 22.0
+size_flags_stretch_ratio = 15.0

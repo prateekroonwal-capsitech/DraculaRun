@@ -2,60 +2,71 @@ class_name SunRig
 extends Node3D
 
 ## SunRig — owns the DirectionalLight3D and the sun's angular state.
-## Azimuth sweeps the sun across the road (negative = left / −X, positive = right / +X,
-## 0 = straight ahead down −Z). Elevation sets shadow length. The SunControl UI only
-## sets a *target*; the rig moves toward it with a capped, smoothed angular speed so
-## moving the sun is a deliberate skill rather than instant.
+## Azimuth swings the sun across the level (negative = left / −X, positive = right / +X,
+## 0 = straight ahead down −Z); elevation sets shadow length (low = long). Both ranges
+## come from the level (ShadowLevel). SunControl only sets a *target*; the rig moves
+## toward it with a capped, smoothed angular speed.
+##
+## Exposure guard: when `guard` is set (Callable(dir: Vector3) -> bool, "is Dracula
+## still fully shaded with the sun in this direction?"), every step that would expose
+## him is refused — the sun stops at the last safe angle, the target is clamped there
+## and `guard_blocked` fires (the widget shakes, Dracula flinches).
 ## PDF §4 CPU: the physics tick is disabled whenever the sun is at rest on its target.
 
 ## Emitted whenever the live (not target) angles change.
 signal sun_moved(azimuth_deg: float, elevation_deg: float)
+## The sun reached its target and stopped moving.
+signal settled
+## A sun move was refused because it would expose Dracula.
+signal guard_blocked
 
 @export_group("Limits")
 @export var azimuth_min: float = -70.0
 @export var azimuth_max: float = 70.0
-## Low clamp keeps shadows from swallowing the whole road.
 @export var elevation_min: float = 18.0
 @export var elevation_max: float = 60.0
 
 @export_group("Motion")
-## Hard cap on angular speed, degrees per second. Keep SegmentValidator's
-## max_azimuth_speed / max_elevation_speed (segment_validator.tres) in sync.
-@export var max_azimuth_speed: float = 135.0
-@export var max_elevation_speed: float = 135.0
+## Hard cap on angular speed, degrees per second.
+@export var max_azimuth_speed: float = 180.0
+@export var max_elevation_speed: float = 180.0
 ## Exponential smoothing toward the target (1/s). Higher = snappier (lag ≈ 1/smoothing s).
-@export var smoothing: float = 13.0
+@export var smoothing: float = 22.0
 ## Minimum catch-up speed (°/s) so the exponential tail never crawls after the finger stops.
-@export var min_follow_speed: float = 40.0
+@export var min_follow_speed: float = 60.0
 ## Within this many degrees of the target the sun snaps onto it and stops ticking.
 @export var settle_threshold: float = 0.25
+## Binary-search steps used to find the last safe angle when the guard refuses a step.
+@export var guard_search_steps: int = 6
 
 @export_group("Start")
-@export var start_azimuth: float = 35.0
-@export var start_elevation: float = 38.0
+@export var start_azimuth: float = 0.0
+@export var start_elevation: float = 40.0
 
 @export_group("Look")
 @export var light: DirectionalLight3D
-@export var world_environment: WorldEnvironment
-@export var sun_color: Color = Color(1.0, 0.8, 0.45)
-@export var low_sun_horizon: Color = Color(1.0, 0.55, 0.22)
-@export var high_sun_horizon: Color = Color(0.98, 0.82, 0.55)
-@export var low_sun_ambient: Color = Color(0.32, 0.3, 0.62)
-@export var high_sun_ambient: Color = Color(0.38, 0.4, 0.7)
+@export var sun_color: Color = Color(1.0, 0.82, 0.42)
+@export var sun_energy: float = 1.5
 
 var azimuth: float = 0.0
 var elevation: float = 45.0
 var target_azimuth: float = 0.0
 var target_elevation: float = 45.0
-
-var _sky: ProceduralSkyMaterial
+## Callable(dir: Vector3) -> bool. Empty = no guard.
+var guard: Callable = Callable()
 
 func _ready() -> void:
 	# Update the light before anything that queries it this physics frame (ShadowSensor).
 	process_physics_priority = -10
-	if world_environment and world_environment.environment and world_environment.environment.sky:
-		_sky = world_environment.environment.sky.sky_material as ProceduralSkyMaterial
 	snap_to(start_azimuth, start_elevation)
+
+## Per-level setup: azimuth/elevation ranges and the starting angle.
+func configure(az_min: float, az_max: float, el_min: float, el_max: float, start_az: float, start_el: float) -> void:
+	azimuth_min = az_min
+	azimuth_max = az_max
+	elevation_min = el_min
+	elevation_max = el_max
+	snap_to(start_az, start_el)
 
 ## Direction from the ground toward the sun (unit vector) for the given angles.
 ## Static so validators/self-checks share the exact same math as gameplay.
@@ -76,7 +87,7 @@ func set_target(azimuth_deg: float, elevation_deg: float) -> void:
 func nudge_target(d_azimuth: float, d_elevation: float) -> void:
 	set_target(target_azimuth + d_azimuth, target_elevation + d_elevation)
 
-## Teleport (no rate limit). Used at run start, by tests and by the segment validator.
+## Teleport (no rate limit, no guard). Used at level start and by tests/validators.
 func snap_to(azimuth_deg: float, elevation_deg: float) -> void:
 	target_azimuth = clampf(azimuth_deg, azimuth_min, azimuth_max)
 	target_elevation = clampf(elevation_deg, elevation_min, elevation_max)
@@ -86,17 +97,44 @@ func snap_to(azimuth_deg: float, elevation_deg: float) -> void:
 	set_physics_process(false)
 
 func is_settled() -> bool:
-	return is_equal_approx(azimuth, target_azimuth) and is_equal_approx(elevation, target_elevation)
+	return not is_physics_processing()
 
 func _physics_process(delta: float) -> void:
 	var blend := 1.0 - exp(-smoothing * delta)
-	azimuth += _follow_step(target_azimuth - azimuth, blend, max_azimuth_speed, delta)
-	elevation += _follow_step(target_elevation - elevation, blend, max_elevation_speed, delta)
+	var new_az := azimuth + _follow_step(target_azimuth - azimuth, blend, max_azimuth_speed, delta)
+	var new_el := elevation + _follow_step(target_elevation - elevation, blend, max_elevation_speed, delta)
+	if guard.is_valid() and not _safe(new_az, new_el) and _safe(azimuth, elevation):
+		# Find the furthest safe angle between here and the refused step, then stop there.
+		var lo := 0.0
+		var hi := 1.0
+		for _i in guard_search_steps:
+			var mid := (lo + hi) * 0.5
+			if _safe(lerpf(azimuth, new_az, mid), lerpf(elevation, new_el, mid)):
+				lo = mid
+			else:
+				hi = mid
+		azimuth = lerpf(azimuth, new_az, lo)
+		elevation = lerpf(elevation, new_el, lo)
+		target_azimuth = azimuth
+		target_elevation = elevation
+		_apply()
+		set_physics_process(false)
+		guard_blocked.emit()
+		settled.emit()
+		return
+	azimuth = new_az
+	elevation = new_el
 	if absf(target_azimuth - azimuth) < settle_threshold and absf(target_elevation - elevation) < settle_threshold:
 		azimuth = target_azimuth
 		elevation = target_elevation
 		set_physics_process(false)   # PDF §4: at rest — stop ticking
+		_apply()
+		settled.emit()
+		return
 	_apply()
+
+func _safe(az: float, el: float) -> bool:
+	return guard.call(direction_from_angles(az, el))
 
 ## Smoothed step toward the target: exponential ease, never slower than
 ## min_follow_speed (no lingering tail), never faster than max_speed, never overshooting.
@@ -108,22 +146,5 @@ func _apply() -> void:
 	if light:
 		light.global_basis = Basis.looking_at(-get_toward_sun(), Vector3.UP)
 		light.light_color = sun_color
-		# Slightly weaker light near the horizon; still strong enough to read as "danger".
-		light.light_energy = lerpf(1.35, 1.75, _elevation_t())
-	_apply_tint()
+		light.light_energy = sun_energy
 	sun_moved.emit(azimuth, elevation)
-
-func _elevation_t() -> float:
-	return inverse_lerp(elevation_min, elevation_max, elevation)
-
-func _apply_tint() -> void:
-	var t := _elevation_t()
-	if _sky:
-		_sky.sky_horizon_color = low_sun_horizon.lerp(high_sun_horizon, t)
-		_sky.ground_horizon_color = low_sun_horizon.lerp(high_sun_horizon, t).darkened(0.35)
-	if world_environment and world_environment.environment:
-		# Shade is lit only by ambient: keep it cool blue-violet so it contrasts the golden sun.
-		var env := world_environment.environment
-		env.ambient_light_color = low_sun_ambient.lerp(high_sun_ambient, t)
-		# Side sun reads a touch warmer overall.
-		env.ambient_light_color = env.ambient_light_color.lerp(Color(0.45, 0.35, 0.55), absf(azimuth) / 140.0)

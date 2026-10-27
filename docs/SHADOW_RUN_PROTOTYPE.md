@@ -1,332 +1,314 @@
 # Shadow Run — Prototype
 
-A 2.5D gothic endless runner built on the Godot Game Template. Dracula runs forward
-automatically down a 3-lane road. He survives only in shade, and the player controls
-where the shade falls by moving the sun. Build stage: `PROTOTYPE` (local only: no
-network, ads or analytics).
+A portrait 2.5D gothic **shadow-hopping puzzle game**. Dracula can only walk where it is
+shaded. The player moves the sun to reshape the shadows, then taps a shaded spot to send
+him there. Each level is solved by chaining shadows from the Start to the crypt Goal.
+
+**Core loop:** adjust the sun → a connected shadow path appears → tap a shadow → Dracula
+walks it → repeat until he reaches the goal.
+
+Build stage: `PROTOTYPE` (local only: no network, ads or analytics). Template
+architecture is unchanged: `ServiceRegistry` is the only autoload, `GameService` is the
+composition root, and services are injected.
 
 ## How to run
 
 | What | How |
 |---|---|
-| Full game | Press **Play** (F5). Flow: `Boot.tscn` → Home → **Play** → `ShadowRun.tscn` |
-| Gameplay scene only | Open `game/scenes/gameplay/shadow_run/ShadowRun.tscn` and press **F6** (see *Editor F6 fallback*) |
+| Full game | **Play** (F5): `Boot.tscn` → Home → **Play** → `levels/Level01.tscn` |
+| One level | Open `game/scenes/gameplay/shadow_run/levels/LevelNN.tscn` and press **F6** (see *Editor F6 fallback*) |
+| Level validator | F6 on `level/LevelValidatorRunner.tscn`, or headless (below) |
 | Shade self-check | F6 on `shadow/ShadowSensorSelfCheck.tscn`, or headless (below) |
-| Segment validator | F6 on `track/SegmentValidatorRunner.tscn`, or headless (below) |
-| Retry soak test | F6 on `game/scenes/test/ShadowRunSoakTest.tscn` (windowed, so the two-touch check runs) |
+| End-to-end test | `game/scenes/test/ShadowRunSoakTest.tscn` (headless, below) |
+
+```bash
+godot --headless --path . res://game/scenes/gameplay/shadow_run/level/LevelValidatorRunner.tscn
+```
+
+```bash
+godot --headless --path . res://game/scenes/gameplay/shadow_run/level/LevelValidatorRunner.tscn -- --verbose=3 --az=-30,0 --rows=1
+```
 
 ```bash
 godot --headless --path . res://game/scenes/gameplay/shadow_run/shadow/ShadowSensorSelfCheck.tscn
 ```
 
 ```bash
-godot --headless --path . res://game/scenes/gameplay/shadow_run/track/SegmentValidatorRunner.tscn -- --verbose=seg_arcade
+godot --headless --path . res://game/scenes/test/ShadowRunSoakTest.tscn
 ```
 
-```bash
-godot --path . res://game/scenes/test/ShadowRunSoakTest.tscn
-```
+Each tool exits with code 0 on success.
 
-Each tool exits with code 0 on success. `--verbose=<segment_id>` (or `*`) prints a shade
-map for every sun angle, one character per meter per lane: `#` shaded, `+` partly lit,
-`.` lit, `X` obstacle.
-
-> The soak test plays 10 real runs, so it writes runs and best distance into your local
-> save (`user://saves/`).
+- `--verbose=N` prints level N's walkable map at the level's minimum, start and maximum
+  sun angles (plus any `--az=` angles). Symbols: `o` shaded and walkable, `.` sunlit,
+  `#` solid, `S` start, `G` goal.
+- **The end-to-end test plays every level for real.** It replays the solver's plan through
+  the same `move_to` that taps use, moves the sun under the exposure guard, presses Next,
+  then does death → Retry loops and checks node counts. It writes level progress to your
+  local save (`user://saves/`).
 
 ### Editor F6 fallback
 
-`ShadowRunFeature.editor_f6_fallback` (on by default) handles the case where the scene was
-launched directly and nothing injected it. It then creates `GameService` itself and runs
-the same `inject_services()` pass that `SceneManager` would. The fallback:
-
-- is guarded by `OS.has_feature("editor")`, so it never runs in exported builds;
-- waits two frames, so it never fires in the normal Boot → Home → Play flow;
-- is the only place in gameplay code that touches `ServiceRegistry` or `/root`.
+`ShadowRunFeature.editor_f6_fallback` (on by default) handles a level launched directly
+with nothing injected. It boots `GameService` itself and runs the same injection pass.
+It is guarded by `OS.has_feature("editor")`, waits two frames (so it never fires in the
+normal flow), and is the only place in gameplay code that touches `ServiceRegistry` or
+`/root`.
 
 ## Controls
 
 | Action | Touch | Desktop |
 |---|---|---|
-| Change lane | Swipe left/right in the **play view** (≥ ~60 px at 1080 width). A long drag can switch two lanes. | A/D or ←/→ |
-| Sun azimuth (left ↔ right) | Drag horizontally in the **bottom sun strip** (relative drag, 1.3× sensitivity: touching never jumps the sun) | Q / E (or mouse drag in the strip) |
-| Sun elevation (high ↔ low) | Drag vertically in the strip | R / F |
+| Move Dracula | **Tap** a spot in the play view | Left-click |
+| Turn the sun (azimuth) | **Drag horizontally** in the bottom sun strip | Q / E (or mouse-drag in the strip) |
+| Raise / lower the sun (elevation) | **Drag vertically** in the strip (up = short shadows, down = long) | R / F |
 | Pause | ‖ button (top-left) | Esc or P |
-| Debug overlay | Faint "dbg" button (bottom-left of the play view) | F3 |
+| Debug overlay | Optional "dbg" button (off by default) | F3 (debug builds only) |
 
-**Touch arbitration.** A touch that starts inside the sun strip belongs to the sun until it
-lifts: `SunControl._input()` consumes it. Every other touch reaches
-`DraculaController._unhandled_input()` as a swipe candidate. Two fingers at once work
-(the soak test checks this in a real window). Lane input registers in the same frame as
-the event, and one extra move is buffered while a slide (0.12 s) is in progress.
+**Tap to move.** A tap is a press that moves less than `tap_slop` (30 px) within
+`tap_max_time` (0.45 s).
 
-## Portrait layout
+- **Reachable** (a shaded cell connected to Dracula's shadow region, hops included): he
+  runs the A* path at 8 m/s (walks at 5 m/s if it's 2 m or shorter). He accelerates at
+  45 m/s² and brakes into the last cell, turns quickly to face his heading, and hops gaps
+  in 0.3 s. A soft ring pulses at the target.
+- **Unreachable:** a red ring pulses at the tap and Dracula shakes his head. He never
+  walks through sunlight.
+- **Tapping while he's moving** re-routes from where he is.
+- **During a sun drag** taps are ignored. A tap made while the shade is still updating is
+  held and answered within a few frames.
 
-| Setting | Value |
-|---|---|
-| Viewport | 1080 × 1920; desktop window override 540 × 960 |
-| Orientation | `display/window/handheld/orientation = portrait` (locked) |
-| Stretch | `canvas_items`, aspect `expand` (works from 9:16 to 9:21 phones and 3:4 tablets) |
-| Safe area | `ShadowRunHUD` pads its `SafeArea` container with `DisplayServer.get_display_safe_area()` on mobile |
-| Export presets | `export_presets.cfg` is git-ignored and does not exist yet. When you create the Android/iOS presets, keep the orientation portrait-only; the project setting above is what they inherit. |
+**Sun.** Relative drag: touching never jumps the sun. Horizontal drag sets azimuth;
+vertical drag sets elevation, shown by the sun's height in the strip (the guide arc
+stays fixed; the sun sits above it when high and below it when low). Drag sensitivity is 1.5× and the sun follows the finger at up to 180°/s. While the
+sun is being dragged, Dracula stops at the next cell and stands still.
 
-Screen from top to bottom (`VBoxContainer` stretch ratios in `ShadowRunHUD.tscn`):
+**Exposure guard.** The sun cannot be turned to an angle that would put Dracula's
+footprint in sunlight. It stops at the last safe angle, the strip shakes with a red edge,
+and Dracula flinches. Dragging the sun alone can never burn him.
 
-1. **Top bar, 10%:** pause, distance, exposure meter.
-2. **Play view, 68%:** the 3D road. Only transient labels appear here (countdown, hints, the faint debug button).
-3. **Sun strip, 22%:** a wide, shallow arc. The sun icon is about 150 px across.
+**Goal connection.** No outline is drawn on shadow edges during gameplay. When the shadow
+region Dracula stands in reaches the goal, a soft glow ring lights up at the crypt door.
+The region itself is only visualised by the F3 debug overlay.
 
-**Camera** (`camera/CameraRig.tscn`): `keep_aspect = Keep Width`, so `fov` (50°) is the
-horizontal angle and all 3 lanes plus the roadside shadows fill the width; taller screens
-simply see further ahead. Defaults are height 11 m, distance 9 m and pitch 38°, which puts
-Dracula at about 63% of screen height (the lower third of the play view). Rendered
-captures confirmed all 3 lanes, Dracula and the shade ahead at 9:16 (540×960),
-9:20 (432×960) and 3:4 (720×960).
+**Touch arbitration.** Touches that start in the sun strip belong to the sun until they
+lift. They are consumed before the play view sees them, so a sun drag is never a tap and
+two fingers work at once.
 
-## Lane configuration
+## Failure
 
-`track/lane_config.tres` (`LaneConfig`) is the single source of truth for the lanes:
+The exposure meter is a safety net driven by `ShadowSensor`: three foot-level points on
+Dracula ray-cast toward the sun. It rises whenever he is exposed, for example mid-hop, and
+recovers in shade. At 100 the burn → ash-and-bats death plays, then Game Over
+(Retry / Home). All burn feedback is kept: smoke and embers, the emissive rim, the screen
+vignette, the sizzle sound and haptics.
 
-| Field | Value |
-|---|---|
-| `lane_count` | 3 (indexes 0, 1, 2) |
-| `lane_width` | 2.5 m, so lane centers are x = −2.5, 0, +2.5 |
-| `start_lane` | 1 (middle) |
+## Shade grid: gameplay truth
 
-Lane x is computed as `(i − (lane_count − 1) / 2) × lane_width`. These read it:
+`level/ShadeGrid.gd` sits on a node in every level. It covers the walkable floor (x from 0
+to `size.x`, z from 0 to `−size.y`) with `cell_size` cells (0.4 m; 30 × 125 cells for a
+12 × 50 m level).
 
-- `Dracula.tscn` (`lanes`): lane positions, start lane and edge clamping. A swipe or key
-  past the road edge is ignored: no slide, no sound, no haptic. One extra move is still
-  buffered during a slide.
-- `TrackSpawner` (`lanes`, `road_material`): pushes `lane_count` and `lane_width` into the
-  road shader's dashed dividers at prewarm.
-- `segment_validator.tres` (`lanes`): which lanes are sampled.
-- `ShadowDebugOverlay` (`lanes`): lane-center marker lines; Dracula's lane is yellow.
+- **Solid:** a cell is solid if a foot-to-head box (0.15–1.9 m) overlaps the `obstacle` or
+  `shadow_caster` layers. Walls, buildings, the wagon and statues are solid; overhead
+  canopies are not. This is computed once at load.
+- **Shaded:** a cell is shaded if a ray from its ground point (0.15 m up) toward the sun
+  hits the `shadow_caster` layer. This is the same test as `ShadowSensor` and the same
+  caster shapes that cast the visible shadows, so rendered shadow = walkable cell = no
+  burning.
+- **Walkable** = shaded and not solid.
+- **Pathfinding:** A* with 8-way moves and no corner-cutting past sunlight or walls.
+- **Hops:** a straight jump of up to `max_hop_distance` (1.0 m; 0 disables) across
+  non-solid sunlit cells to another walkable cell. It costs extra (`hop_penalty`), so
+  walking is preferred, and it causes a small exposure spike. Hops count for
+  reachability and the goal connection.
 
-No script contains lane positions or a lane count. The **road mesh and the lane-spanning
-props are authored geometry**, so changing the lane count also means re-authoring them.
-Current 3-lane geometry:
+**Updating shade (mobile budget).** At load the grid ray-tests every cell at
+`mask_samples` × `mask_elevation_samples` sun angles across the level's ranges. Cells that never change are frozen;
+only "variable" cells, dilated by one cell, are re-cast afterwards.
 
-- Road 8.5 m wide (edge ±4.25); curbs at ±4.4; sidewalks 4.55–8.05.
-- Roadside props sit at |x| ≥ 4.75: facades ±6.25, castle walls ±5.45, towers ±7.25,
-  trees ±6.75, ruin walls ±5.65, pillars ±5.05.
-- Stone arch: piers ±5.35, deck 11.9 m.
-- Banner gantry: posts ±5.25, beam 10.9 m.
-- Arcade canopy: posts ±5.25; the roof is 4.4 m wide over the middle lane only.
-- Gatehouse: towers ±7.75, deck 11.5 m.
+- **While the sun moves:** passes are throttled to `max_updates_per_second` (10) and
+  time-sliced at `rays_per_frame` (300 rays, about 0.6 ms on desktop and roughly 3 ms on
+  a mid-range phone).
+- **When the sun settles:** a full pass runs at `settle_rays_per_frame` (1,200), finishing
+  in about 3 frames.
+- **Setup** takes about 90 ms on desktop for a 3,750-cell level.
 
-**Overhead casters fade.** The gate roof, arch decks, canopies, gantry beams and banners sit
-between the high camera and Dracula. Each of these parts is two meshes:
+**Measured cost.** A ray costs about 2 µs from GDScript on desktop. In these levels about
+85–90% of cells are variable, because long building shadows sweep most of the street.
 
-- a visual mesh that fades out within 16 m of the camera (`visibility_range_begin`);
-- a twin with `cast_shadow = Shadows Only` that always casts.
+## Level structure
 
-So the shadow on the road never disappears and Dracula is never hidden.
+Each level is a scene, `levels/LevelNN.tscn`, with this hierarchy:
 
-## Scene list (everything is an editable `.tscn`)
+```
+LevelNN (ShadowLevel)            level_number, level_title, next_level, hint,
+                                 sun_start_azimuth/elevation, azimuth_min/max, elevation_min/max
+├─ Ground (StaticBody3D)         flat ochre floor (ground_ochre.tres) + dark outer ground
+├─ ShadeGrid                     grid origin = its position; size, cell_size, max_hop_distance…
+├─ Start (Marker3D)              Dracula's spawn (must be shaded at the start angle)
+├─ Goal (CryptDoor.tscn)         LevelGoal Area3D; crypt behind it is a caster + solid
+├─ Props/…                       instanced caster/obstacle scenes (buildings, statue, wagon…)
+└─ Game (ShadowRun.tscn)         shared gameplay shell; Game/ShadowRunFeature.level = ".."
+```
 
-All gameplay paths are under `game/scenes/gameplay/shadow_run/`.
+`ShadowRun.tscn` is the shared shell, holding the feature, environment, `SunRig`, Dracula,
+sensor, camera, backdrop, tap marker, debug overlay and HUD. Each level
+instances it, so every level runs directly through `SceneManager.go_to(path)`. On the
+Level Complete panel:
 
-| Scene | What it is |
-|---|---|
-| `ShadowRun.tscn` | Gameplay root: `ShadowRunFeature`, WorldEnvironment, SunRig, TrackSpawner, Dracula, ShadowSensor, RunCamera, Backdrop, DebugOverlay, HUD layer |
-| `player/Dracula.tscn` | CharacterBody3D with body, head, cape, hitbox, 3 shade sample markers, BurnFX, DeathFX |
-| `player/BurnFX.tscn` | Smoke and ember particles plus the flare light (scaled with exposure) |
-| `player/DeathFX.tscn` | One-shot ash and bat bursts |
-| `sun/SunRig.tscn` | DirectionalLight3D and sun angle state |
-| `camera/CameraRig.tscn` | Portrait chase camera (all framing values exported) |
-| `track/TrackSegment.tscn` | Base road segment (30 m, 3 lanes, `Casters` / `Obstacles` / `OptionalObstacles`) |
-| `track/segments/seg_*.tscn` | 10 authored segments, inherited from `TrackSegment.tscn` |
-| `props/casters/*.tscn` | building_facade, building_facade_short, castle_wall, castle_wall_long, castle_tower, watch_tower, pillar, tree, stone_arch, arcade_vault, banner_gantry, hanging_banner, covered_wagon (dual-purpose), ruin_wall, gatehouse |
-| `props/obstacles/*.tscn` | crate, spike_trap, fallen_pillar |
-| `Backdrop.tscn` | Distant hills and castle silhouettes (no shadows, no collision) |
-| `debug/ShadowDebugOverlay.tscn` | Ray lines and info panel; hidden by default |
-| `shadow/ShadowSensorSelfCheck.tscn` | Self-check rig: caster box, obstacle box, sun, probe, sensor |
-| `track/SegmentValidatorRunner.tscn` | Validator tool scene |
-| `game/scenes/ui/mfw/ShadowRunHUD.tscn` | Portrait HUD |
-| `game/scenes/ui/mfw/SunControl.tscn` | Sun strip |
-| `game/scenes/ui/mfw/GameOverPanel.tscn`, `PausePanel.tscn` | Panels pushed through `UIManager.push_packed()` |
-| `game/scenes/test/ShadowRunSoakTest.tscn` | Retry, leak and two-touch soak test |
+- **Next** loads `next_level`. After the last level it reads "Finish" and returns Home.
+- **Retry** reloads the level.
+- **Home** returns to the Home scene.
 
-Saved resources:
+**Completion** calls `SaveManager.complete_level(level_number, 3, 100)` then `save_game()`.
+It emits `GameBus.level_completed` and calls `GameManager.game_over("level_complete")`.
+Home's Play opens Level01 and shows "Levels cleared: N".
 
-- `track/run_difficulty.tres`: speed, segment difficulty, obstacle density and sun-delta curves, plus the onboarding sequence.
-- `track/segment_validator.tres`: validator settings.
-- `game/assets/materials/*.tres`: every material, including Dracula's, the FX, the burn rim, debug rays and backdrop.
-- `game/assets/shaders/*.gdshader`: burn rim, burn vignette, cobble road.
-- `game/assets/audio/sfx/*.wav`: placeholder SFX, synthesized and original.
+### The three prototype levels
 
-**Nothing visual is assembled in code.** Scripts only animate or configure nodes that
-already exist in scenes. The remaining `new()` calls are physics query parameters, an RNG,
-validator data structs, and the `GameService` composition-root bootstrap in the F6
-fallback and the soak harness. The only runtime geometry is the debug overlay's per-frame
-ray lines.
+| Level | Idea | Sun |
+|---|---|---|
+| 1 · The Gargoyle (start el 40°) | **Teaching.** The left row shades the start. Walk to the gargoyle, stand in its shadow, swing the sun right, and the right row's shadow leads to the crypt. | Start −40°; one sweep to the right while sheltered by the statue |
+| 2 · Two Alleys (start el 38°) | **Branching.** A chapel splits the street. Left route: switch the sun early, in the spire's shadow in front of the chapel, and use the chapel's shadow down the left alley. Right route: use the chapel's shadow down the right alley at the start angle, then switch late at the gargoyle by the exit. | Start −35°; one switch, early or late |
+| 3 · The Narrow Gate (start el 32°) | **Timing.** A 2.4 m gate between castle walls. With the sun nearly ahead, the **covered wagon's** shadow fills the gap, so the wagon is both what blocks the path and what lets you through. Past it, swing further left so the wagon throws shade beside itself, slip around it, and reach the crypt in the left buildings' shadow. | Start +30°; two adjustments |
 
-## Script map
+All levels use the full default ranges (azimuth −80…80°, elevation 15…65°).
 
-| Script | Role |
-|---|---|
-| `ShadowRunFeature.gd` (GameFeature) | Run lifecycle: injection → prewarm → countdown → `GameManager.start()` → per-frame loop → death → save → Game Over / Retry / Home; pause; GameBus relays |
-| `player/DraculaController.gd` (extends `PlayerController3D`) | Auto-run, lanes and input buffer, swipe detection, burn feedback, both death animations |
-| `game/scripts/controllers/PlayerController3D.gd` | 3D twin of the template's 2D `PlayerController`, with the same injection contract |
-| `sun/SunRig.gd` | Azimuth/elevation clamps, speed-capped smoothing (135°/s), no-tail settle, light orientation, sky/ambient tint |
-| `shadow/ShadowSensor.gd` | Gameplay shade truth (raycasts) and the exposure meter |
-| `track/TrackSegment.gd`, `SegmentSafeWindow.gd` | Segment metadata and pooling helpers |
-| `track/TrackSpawner.gd` | Prewarmed pool, recycling, difficulty-driven selection |
-| `track/RunDifficulty.gd` | Difficulty resource (curves) |
-| `track/SegmentValidator.gd` (Resource) | Fairness and "sun matters" proof per segment |
-| `camera/RunCameraController.gd` | Follow (lane lag), shake, death dolly |
-| `ui/mfw/ShadowRunHUD.gd`, `SunControl.gd`, `ExposureMeter.gd`, `GameOverPanel.gd`, `PausePanel.gd` | UI (all `UIController` except the meter) |
-| `powerups/PowerUp.gd` | Empty interface stub (out of scope) |
+`level/LevelValidatorRunner.tscn` (driven by `level_solver.tres`) proves each level is
+**solvable**, **needs at least one sun adjustment**, and is **not trivial**: no single sun
+sweep from the start spot connects straight to the goal. It searches the sun on both axes
+(21 azimuth × 6 elevation samples). Its search moves the sun only while
+Dracula stands on a pivot cell that stays shaded, with a margin, at both sample angles and
+halfway between, mirroring the in-game guard. The end-to-end test then replays those
+plans in the real game.
 
-**GameBus signals added:**
+## How to build a level in the editor
 
-- `sun_exposure_changed(value)`
-- `lane_changed(lane)`
-- `distance_changed(meters)`
-- `powerup_collected(id)` (reserved; nothing emits it)
+1. Duplicate `levels/Level01.tscn` (or make a new scene with the hierarchy above). On the
+   root, set `level_number`, `level_title`, `hint`, `next_level`, `sun_start_azimuth`,
+   `sun_start_elevation`, and the ranges `azimuth_min` / `azimuth_max` /
+   `elevation_min` / `elevation_max` (narrow them if a puzzle needs it). Point the previous level's
+   `next_level` at it.
+2. Keep **ShadeGrid** covering the walkable floor. The levels use a 12 × 50 m street from
+   x −6 to +6, starting at z +1.5.
+3. Drag props from `props/casters/` (buildings, walls, `statue`, `chapel_block`,
+   `covered_wagon`, `tree`, `pillar`, …) and `props/obstacles/` under **Props**, then move
+   them with the gizmo. Anything that casts a visible shadow must have a matching
+   `ShadowCaster` collision shape on layer 4 (`shadow_caster`); all existing props do.
+   Anything standing on the ground (0.15–1.9 m) becomes solid automatically.
+4. Place **Start** in shade at the start angle, and **Goal** (`props/goal/CryptDoor.tscn`)
+   where the player should end up. The crypt sits 2.4 m behind the goal point.
+5. Make sure the instanced **Game** node's `ShadowRunFeature.level` points at the root
+   (`../..`).
+6. Add the scene to `LevelValidatorRunner.tscn` → `level_scenes` and run it. Use
+   `--verbose=N --az=… --rows=1` maps to see where shadows connect, then iterate until it
+   passes (solvable, needs the sun, not trivial). Add `--el=<deg>` to dump at another
+   elevation.
 
-**Deaths** emit the existing parameterless `player_died` (through `PlayerController3D.die()`),
-then `GameManager.game_over(cause)` with `cause` = `"sunlight"` or `"obstacle"`. The
-template's `player_died` has no argument, so the cause travels on `game_over`.
+**Puzzle tips.** Shadows stretch toward +Z (back toward the start) by
+`height × cot(elevation) × cos(azimuth)` and sideways by
+`−height × cot(elevation) × sin(azimuth)`. A tall block next to the path is a natural
+pivot, because the cells right behind it stay shaded through most sun angles.
 
-**Saving.** The `stats` repository holds the run count (`matches_played`), plus
-`custom.best_distance` and `custom.total_distance`, followed by an explicit `save_game()`.
-Home shows the best distance and run count.
+## Visual style
 
-## How shade detection works
+Golden sun against dark shadow is the dominant read:
 
-Shade is never read from the shadow map. Every physics frame, `ShadowSensor` casts one ray
-from each of Dracula's three markers (feet 0.2 m, torso 1.0 m, head 1.65 m) toward the sun.
+- **Lighting:** all scenery uses **toon diffuse with specular off**. The ground is golden
+  ochre in sun; ambient light is low and dark brown-purple, so shadows read near-black.
+- **Shadow edges:** the sun's shadows are crisp (`shadow_blur` 0, mobile hard filtering,
+  bias 0.08 / normal bias 2 against acne).
+- **Atmosphere:** the sky is a flat warm gradient, with no glow and no fog. Buildings,
+  walls, the statue, chapel and crypt are dark, simple silhouettes.
+- **Accent:** one blood-red accent, used sparingly (the crypt lantern and Dracula's eyes
+  and cape lining).
+- **Materials** are `.tres` files under `game/assets/materials/`.
 
-- The direction is `SunRig.direction_from_angles(az, el)`, which is the light's −forward vector.
-- Rays are 60 m long and only hit the `shadow_caster` physics layer (layer 4).
-- A blocked ray means that point is shaded: `exposure_fraction = lit / 3`.
+**Camera** (`camera/CameraRig.tscn`):
 
-The exposure meter (0–100):
+- 55° pitch, 14 m high, 5.5 m behind.
+- `keep_aspect = Keep Width` with a 46° horizontal FOV, so the whole 12 m level width is
+  always visible.
+- X is centred on the level (`center_x` from `ShadowLevel.center_x()`); Z follows Dracula
+  smoothly (`forward_smoothing` 4), keeping him in the lower-middle of the play view.
 
-- rises at `burn_rate × fraction`, with `burn_rate = 100/1.2`, so full sun kills in ~1.2 s;
-- heals at `heal_rate` (32/s) in full shade;
-- fires `burned_out` at 100.
+Captures were checked at 9:16 (540×960), 9:20 (432×960) and 3:4 (720×960). At 3:4 the full
+width is visible but less depth ahead.
 
-`exposure_changed` is only emitted on changes of at least 1 point.
+**Layout** (portrait 1080×1920, `canvas_items` / `expand`, locked portrait, safe-area padding):
 
-**Rendering and gameplay agree** because every visible shadow-casting mesh has an identical
-collision shape on layer 4. Small decorative parts (windows, iron bands, wheels, spikes)
-have `cast_shadow` off, so they cast nothing in either system. Physics layers:
+1. **Top bar, 10%:** pause, level label, exposure meter.
+2. **Play view, 75%:** taps happen here; nothing covers it except transient labels.
+3. **Sun strip, 15%.**
 
-- `ground` (1)
-- `player` (2)
-- `obstacle` (3)
-- `shadow_caster` (4)
+## Debug overlay (F3, off by default)
 
-Caster collision only blocks light. Physical blocking comes from a separate
-`ObstacleBody` on layer 3, which the covered wagon, crate and fallen pillar have.
+`debug/ShadowDebugOverlay.tscn` draws:
 
-**Verify it with F3.** Green rays are shaded and red rays are lit. In a visible shadow,
-all three should be green.
+- every grid cell: green walkable, orange sunlit, grey solid, blue reachable from Dracula;
+- the current path (white line) and the sensor's foot rays (green shaded, red lit);
+- text: sun angle and target, grid size and variable-cell count, exposure, fps and node count.
 
-## Authoring a new segment in the editor
-
-1. **Scene → New Inherited Scene…** from `track/TrackSegment.tscn`. The road runs from
-   z = 0 to z = −30 (run direction −Z). Lane centers are x = −2.5, 0, +2.5 (lanes 0, 1, 2).
-   Roadside props go at |x| ≥ 4.75. A fallen pillar spans two lanes when centered at
-   x = ±1.25.
-2. Drag caster scenes from `props/casters/` under **Casters**. Drag obstacles under
-   **Obstacles** (always present) or **OptionalObstacles** (enabled by density).
-   Move them with the gizmo.
-3. On the root node, fill in the exports:
-   - `segment_id`, `difficulty` (0–1), `onboarding`, `weight`, `requires_sun_move`;
-   - at least one `safe_windows` entry (New `SegmentSafeWindow`): lane, start/end meters,
-     and azimuth/elevation range.
-4. Save as `track/segments/seg_<name>.tscn`, then add it to **TrackSpawner →
-   segment_scenes** in `ShadowRun.tscn`. Pools are prewarmed at load, `copies_per_scene` = 2.
-5. Run `SegmentValidatorRunner.tscn`. A segment fails if it:
-   - is **unsolvable**: no lane+sun path survives (optional obstacles on);
-   - is **sun_irrelevant**: a path survives the worst sun angle everywhere;
-   - is **sun_optional**: every fixed sun angle solves it;
-   - has `requires_sun_move` set while a fixed angle solves it;
-   - declares a safe window that isn't really shaded;
-   - is **lane_always_safe**: one lane, ridden straight through, survives the worst sun
-     angle. With only 3 lanes this is the easiest way for the sun to become irrelevant;
-   - is **all_lanes_blocked**: every lane is physically blocked at the same distance, with
-     all optional obstacles on. This is what guarantees the spawner can never close the road.
-
-   It also **warns** (`lane_mostly_shaded`) when a lane is shaded at every sun angle for
-   more than 40% of its length.
-
-   Use `--verbose=<id>` shade maps to place safe windows.
-
-**New casters.** Pair each shadow-casting mesh with an identical `CollisionShape3D` under a
-`ShadowCaster` StaticBody3D (layer 4, mask 0). For overhead parts, also follow the fade
-pattern: a visual mesh with `cast_shadow = Off` and `visibility_range_begin = 16`, plus a
-`Shadows Only` twin.
+Rendered shadows and green/blue cells must coincide; captures confirmed they do.
 
 ## Tunables
 
 | Where | What |
 |---|---|
-| `lane_config.tres` | `lane_count` (3), `lane_width` (2.5 m), `start_lane` (1) |
-| `run_difficulty.tres` | `speed_min` 9 / `speed_max` 17 m/s and `speed_curve` over `ramp_duration_s` (360 s); `max_difficulty_curve`, `difficulty_window`; `obstacle_density_curve`; `sun_delta_curve`; onboarding duration (30 s) and sequence |
-| `ShadowSensor` (in `ShadowRun.tscn`) | `burn_rate`, `heal_rate`, `ray_length`, `emit_step` |
-| `SunRig` (select **SunRig** in `ShadowRun.tscn`, or open `sun/SunRig.tscn`; Motion group) | Azimuth −70…70, elevation 18…60, `max_azimuth_speed` / `max_elevation_speed` 135 °/s, `smoothing` 13 /s (≈ 0.08 s lag), `min_follow_speed` 40 °/s, `settle_threshold` 0.25°, start angles (−45°/36° so onboarding starts in shade), colors |
-| `Dracula` | Lane positions, slide time, swipe threshold (fraction of width), burn and death animation timings, bob/lean |
-| `CameraRig` | `height`, `distance`, `pitch_degrees`, `fov`, `lateral_follow`, death cam |
-| `SunControl` (select **HUDLayer/ShadowRunHUD/…/SunControl**, or open `ui/mfw/SunControl.tscn`) | `drag_sensitivity` 1.3, `key_azimuth_speed` / `key_elevation_speed` 135 °/s, `sun_radius` (≥ 70), arc sag, high/low rows |
-| `ShadowRunFeature` | Countdown, onboarding `hint_times` / `hint_texts`, F6 fallback |
-| `segment_validator.tres` | Sample grid, entry exposure (25), lane dwell (0.3 s), window tolerance, `max_azimuth_speed` / `max_elevation_speed` (keep equal to SunRig: 135 °/s) |
-
-## Mobile renderer and shadow settings
-
-| Setting | Value |
-|---|---|
-| Renderer | `rendering_method = mobile` on desktop and mobile; project features "Mobile". This replaces the template's GL Compatibility default, as the brief requires. |
-| Sun light | 2 cascades (`PARALLEL_2_SPLITS`), split 0.25, `max_distance` 100 m, no blend splits, bias 0.04 / normal bias 1.2, pancake 30 |
-| Shadow atlas (mobile) | Directional size 2048 and hard filtering (the engine's mobile defaults); positional atlas 1024 |
-| Particles | CPUParticles3D only (cheap, no GPU particle compile) |
-| Environment | Ambient from color (no sky ambient cost), reflections disabled, light fog, mild glow |
-
-The 60 FPS target on a mid-range Android device has **not been measured**: there was no
-device in this session. Profile on hardware before tuning further.
+| `LevelNN` root (`ShadowLevel`) | `sun_start_azimuth`, `sun_start_elevation`, `azimuth_min` / `azimuth_max` (−80/80), `elevation_min` / `elevation_max` (15/65), `hint`, `next_level` |
+| `LevelNN/ShadeGrid` | `size`, `cell_size`, `sample_height`, `max_hop_distance`, `hop_penalty`, `solid_probe_heights`, `mask_samples`, `mask_elevation_samples`, `rays_per_frame`, `settle_rays_per_frame`, `max_updates_per_second` |
+| `Game/SunRig` (`sun/SunRig.tscn`) | `max_azimuth_speed` / `max_elevation_speed` (180 °/s), `smoothing` (22), `min_follow_speed` (60), `settle_threshold`, `guard_search_steps`, sun colour and energy; light shadow settings |
+| `Game/HUDLayer/…/SunControl` | strip height via `size_flags_stretch_ratio` on `ShadowRunHUD.tscn` (15, play view 75), `drag_sensitivity` (1.5), `key_azimuth_speed` / `key_elevation_speed` (180 °/s), `elevation_drag_span`, `elevation_travel`, `sun_radius`, arc shape, blocked shake and colour |
+| `Game/HUDLayer/ShadowRunHUD` | `show_debug_button` (off; debug builds only), `min_safe_margin` |
+| `Game/Dracula` (`player/Dracula.tscn`) | `walk_speed` 5, `run_speed` 8, `run_threshold` 2 m, `acceleration` 45 m/s², `hop_time` 0.3 s, `hop_height`, `turn_speed` 22 rad/s, `bob_cycles_per_meter` (bob scales with speed), burn and death timings, cue angles |
+| `Game/ShadowSensor` | `burn_rate` (100/1.2 per s), `heal_rate`, `ray_length` |
+| `Game/ShadowRunFeature` | `tap_slop`, `tap_max_time`, `title_time`, F6 fallback |
+| `Game/RunCamera` | `height`, `distance`, `pitch_degrees`, `fov`, `forward_smoothing`, death cam |
+| `Game/TapMarker` | Colours, pulse time |
+| `level/level_solver.tres` | `azimuth_samples` (21), `elevation_samples` (6), `goal_radius` |
 
 ## Verification done
 
-- **ShadowSensorSelfCheck:** 11/11 pass (lit/shaded at known angles, obstacle layer never shades, burn-out in ~1.2 s, recovery).
-- **SegmentValidator (3 lanes):** all 10 segments pass. Fixed-angle solutions range from 9/75 to 34/75, so every segment needs the sun in a particular region. No lane is safe at every angle, and no distance has every lane blocked. A negative test (burn disabled) confirms `lane_always_safe` fires.
-- **Soak test (windowed):** 10 Retries with flat node count (1806 each time), one `GameBus` connection, 10 saved runs and pause/resume. It also covers two-touch arbitration (sun strip drag + play-view swipe = sun moved and exactly one lane change) and lane edges (bursts of presses past both edges end exactly on lanes 0 and 2).
-- **Rendered captures** at 9:16, 9:20 and 3:4 (framing, HUD inside bounds, shade contrast).
+- **Level validator (two axes, wide ranges):** all 3 levels are solvable, need the sun,
+  and are not trivial. A negative test with a goal next to the start confirmed the
+  triviality check fires.
+- **End-to-end test** (headless, real game through `SceneManager`): PASS.
+  - **Level 1 checks:** pause/resume; a real tap via `handle_tap`; an unreachable tap
+    doesn't move him; the exposure guard stops a sun drag at −11.3° with 0 exposure.
+  - **Playthrough:** all three levels completed by replaying the solver's two-axis plans
+    at the faster movement speeds (peak exposure 12–30 from hops); Level Complete → Next →
+    … → Finish → Home; progression saved.
+  - **Stability:** 5 death → Retry loops with a flat node count (271) and no leaked
+    `GameBus` connections.
+- **ShadowSensorSelfCheck:** passes.
+- **Rendered captures** (mobile renderer): crisp golden/dark contrast, the overlay agrees
+  with the rendered shadows, framing at 9:16, 9:20 and 3:4.
 
-## 3-lane re-authoring notes
+## Known issues / not done
 
-The switch from 4 to 3 lanes kept every segment's purpose:
-
-| Segment | What changed |
-|---|---|
-| `seg_gate_start` | Safe window is now lane 0 only |
-| `seg_left_row` / `seg_right_row` | Lane 0 / lane 2 (was lane 3) |
-| `seg_sun_swing` | Lane 0, then lane 2 |
-| `seg_arcade` | Canopy narrowed to cover only the middle lane (shade puzzle in lane 1); optional crates moved to the outer lanes |
-| `seg_banners` | Gantries hang banners over lanes {0, 2}, then {1}, then {0, 2}; the optional spike trap is in lane 2 |
-| `seg_wagon` | Wagons in the outer lanes (0, then 2) throw shade into the middle lane with the sun left, then right. This is still the wagon decision |
-| `seg_courtyard_gap` | Keep shadow window moved to lane 1 |
-| `seg_ruins_slalom` | Fallen pillars span lanes 0–1, then 1–2, so one lane always stays open |
-| `seg_towers_narrow` | Unchanged except for roadside x |
-
-Every roadside prop moved 0.75 m inward to the narrower road. Obstacle density in
-`run_difficulty.tres` was lowered (peak 0.6, was 0.9; 0.12 at 15% of the ramp, was 0.2).
-
-## Known issues / limits
-
-- **Onboarding segments warn `all_shaded`** (one angle shades over 90% of the road). This is intentional wide shade for the first 30 s, and it is a warning, not a failure.
-- **Validator approximations:**
-  - assumes 25 exposure on entry;
-  - uses the expected speed for the segment's difficulty;
-  - moves elevation one grid step every other tick;
-  - does not model shadows cast across segment boundaries (these can only add shade).
-- **Particle intensity.** `CPUParticles3D` has no `amount_ratio`, so burn intensity scales particle color alpha and speed instead.
-- **Sizzle sound.** `AudioManager` has no looping SFX handle, so the sizzle is retriggered as short bursts while burning.
-- **Desktop window size.** A window taller than your monitor gets clamped by the OS. Test tall aspects at a size that fits, e.g. 432×960 for 9:20.
-- **Headless runs** cannot test touch positions (0×0 window), so the soak test skips that check unless it is windowed.
-- **Generated, then hand-editable.** Props, segments and panels were generated once by throwaway scripts and are now plain scenes. Edit them in the editor; nothing regenerates them.
-- **Placeholder art and audio.**
-- **Template docs.** `docs/OPTIMIZATION_GUIDE.md` (referenced by the template README and by `# PDF §x` comments) and the phase guide are missing from this repo. New code keeps the `# PDF §4 / §5 / §6` convention, based on how existing comments use it.
+- **60 FPS on a mid-range Android device has not been measured** (no device available).
+  The shade budget is about 3 ms per frame while dragging (estimated from desktop ray cost
+  × 5) plus a ~3-frame settle pass, and load is about 0.5 s per level on a phone. Profile on
+  hardware, and lower `rays_per_frame` or `max_updates_per_second` if needed.
+- **The optional camera pan (drag the play view to look ahead) is not implemented.** It
+  would conflict with tap-to-move, so it was left out (the brief allowed it to be off).
+- **The guard protects the footprint, not the whole body.** Shade is decided at foot level
+  (the ground-shadow rule). A low wall can shade his feet while his head is in the sun;
+  that counts as safe.
+- **The solver samples the sun every ~4.3°** and checks halfway points. A hand-dragged sun
+  can still be stopped by the guard in a slightly different place than the solver assumed,
+  which is harmless (the player just picks a better pivot).
+- **Large casters can hide part of the level** from the high camera (for example Level 3's
+  gate walls) until Dracula gets closer.
+- **Dracula is still the capsule placeholder** (the detailed character was reverted), so
+  there are no limbs or cloak physics. His run "animation" is a bob tied to distance
+  travelled, which scales with speed. Placeholder audio.
+- **A faint moiré pattern shows on sunlit ground at the extreme high-sun angle** (around
+  65°). It's not ordinary shadow acne: raising the bias didn't remove it. Mid angles
+  render clean. Still to investigate.
+- **The sun guard is only explicitly tested on azimuth.** It moves both axes together and
+  the playthrough's elevation moves pass through it, but there is no dedicated
+  elevation-blocking test.
+- **Template docs:** `docs/OPTIMIZATION_GUIDE.md` (referenced by `# PDF §x` comments) is
+  missing from this repo.

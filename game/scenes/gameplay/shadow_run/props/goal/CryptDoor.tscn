@@ -1,0 +1,104 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/LevelGoal.gd" id="1_goal"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_dark.tres" id="2_dark"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_trim.tres" id="3_trim"]
+[ext_resource type="Material" path="res://game/assets/materials/roof_slate.tres" id="4_roof"]
+[ext_resource type="Material" path="res://game/assets/materials/window_dark.tres" id="5_door"]
+[ext_resource type="Material" path="res://game/assets/materials/lantern_red.tres" id="6_lantern"]
+[ext_resource type="Material" path="res://game/assets/materials/goal_glow.tres" id="7_glow"]
+
+[sub_resource type="CylinderShape3D" id="Shape_goal"]
+radius = 0.9
+height = 2.0
+
+[sub_resource type="BoxMesh" id="Mesh_body"]
+size = Vector3(3.2, 3.4, 2.6)
+
+[sub_resource type="BoxShape3D" id="Shape_body"]
+size = Vector3(3.2, 3.4, 2.6)
+
+[sub_resource type="PrismMesh" id="Mesh_roof"]
+size = Vector3(3.6, 1.6, 2.9)
+
+[sub_resource type="ConvexPolygonShape3D" id="Shape_roof"]
+points = PackedVector3Array(-1.8, -0.8, -1.45, 1.8, -0.8, -1.45, 0, 0.8, -1.45, -1.8, -0.8, 1.45, 1.8, -0.8, 1.45, 0, 0.8, 1.45)
+
+[sub_resource type="BoxMesh" id="Mesh_door"]
+size = Vector3(1.3, 2.3, 0.1)
+
+[sub_resource type="BoxMesh" id="Mesh_frame"]
+size = Vector3(1.7, 2.6, 0.12)
+
+[sub_resource type="SphereMesh" id="Mesh_lantern"]
+radius = 0.09
+height = 0.18
+radial_segments = 8
+rings = 4
+
+[sub_resource type="TorusMesh" id="Mesh_glow"]
+inner_radius = 0.75
+outer_radius = 0.95
+rings = 32
+ring_segments = 6
+
+[node name="CryptDoor" type="Area3D" node_paths=PackedStringArray("connected_glow")]
+editor_description = "Level goal. The Area3D (origin = where Dracula must step, in front of the door) fires LevelGoal.reached. The crypt behind it (−Z) is a shadow caster and solid. ConnectedGlow lights up when a shaded route reaches the goal."
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+script = ExtResource("1_goal")
+connected_glow = NodePath("ConnectedGlow")
+
+[node name="GoalShape" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("Shape_goal")
+
+[node name="Crypt" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.4)
+
+[node name="Body" type="MeshInstance3D" parent="Crypt"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+mesh = SubResource("Mesh_body")
+surface_material_override/0 = ExtResource("2_dark")
+
+[node name="Roof" type="MeshInstance3D" parent="Crypt"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
+mesh = SubResource("Mesh_roof")
+surface_material_override/0 = ExtResource("4_roof")
+
+[node name="Frame" type="MeshInstance3D" parent="Crypt"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 1.33)
+cast_shadow = 0
+mesh = SubResource("Mesh_frame")
+surface_material_override/0 = ExtResource("3_trim")
+
+[node name="Door" type="MeshInstance3D" parent="Crypt"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 1.38)
+cast_shadow = 0
+mesh = SubResource("Mesh_door")
+surface_material_override/0 = ExtResource("5_door")
+
+[node name="Lantern" type="MeshInstance3D" parent="Crypt"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.75, 1.42)
+cast_shadow = 0
+mesh = SubResource("Mesh_lantern")
+surface_material_override/0 = ExtResource("6_lantern")
+
+[node name="ShadowCaster" type="StaticBody3D" parent="Crypt"]
+collision_layer = 8
+collision_mask = 0
+
+[node name="BodyShape" type="CollisionShape3D" parent="Crypt/ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+shape = SubResource("Shape_body")
+
+[node name="RoofShape" type="CollisionShape3D" parent="Crypt/ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
+shape = SubResource("Shape_roof")
+
+[node name="ConnectedGlow" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.04, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_glow")
+surface_material_override/0 = ExtResource("7_glow")

@@ -1,42 +1,42 @@
 class_name DraculaController
 extends PlayerController3D
 
-## Dracula — auto-runs along −Z, switches between the lanes in LaneConfig, shows burn feedback
-## and plays the two death animations. Run speed is driven by ShadowRunFeature;
-## Dracula never decides on his own that he is dead — he reports obstacle hits
-## and the feature orders the matching death animation.
-## Every visual part lives in Dracula.tscn / BurnFX.tscn / DeathFX.tscn and is
-## assigned through the exported references below; this script only animates them.
+## Dracula — moves only when told to: ShadowRunFeature hands him a path of world
+## points (from ShadeGrid A*) and he walks it (runs if it is long), hopping over
+## flagged sunlit gaps, turning smoothly toward his heading. He never decides on his
+## own where to go. Burn feedback and the sunlight death (flare → ash and bats) are
+## driven from the exposure meter by the feature.
+## Visual parts live in Dracula.tscn / BurnFX.tscn / DeathFX.tscn (assigned via exports).
 
-signal lane_committed(lane: int)
-signal obstacle_hit(body: Node3D)
-## Emitted after the death animation completes. cause is "sunlight" or "obstacle".
+## Reached the last point of the current path.
+signal arrived
+## Emitted after the death animation completes. cause is "sunlight".
 signal death_finished(cause: String)
 
-enum RunState { IDLE, RUNNING, DYING, DEAD }
+enum State { IDLE, ACTIVE, DYING, DEAD }
 
-@export_group("Lanes")
-## Lane count, width and start lane (track/lane_config.tres).
-@export var lanes: LaneConfig
-## Seconds for one lane slide.
-@export var lane_switch_time: float = 0.12
-
-@export_group("Swipe")
-## Minimum horizontal travel, as a fraction of the viewport WIDTH, before a drag
-## counts as a swipe (0.056 = ~60 px on a 1080-wide portrait screen).
-@export_range(0.01, 0.2) var swipe_threshold_fraction: float = 0.056
-## A drag is horizontal when |dx| >= |dy| * this ratio.
-@export var swipe_horizontal_ratio: float = 1.2
+@export_group("Movement")
+@export var walk_speed: float = 5.0
+@export var run_speed: float = 8.0
+## Paths longer than this (meters) are run instead of walked.
+@export var run_threshold: float = 2.0
+## Speed gained/lost per second (m/s²): snappy start, short brake into the last cell.
+@export var acceleration: float = 45.0
+## Seconds per hop, whatever its length (keeps hops quick at any speed).
+@export var hop_time: float = 0.3
+@export var hop_height: float = 0.55
+## Turn rate toward the travel direction, radians/s.
+@export var turn_speed: float = 22.0
 
 @export_group("Scene parts")
 @export var visual: Node3D
-@export var hitbox: Area3D
 @export var smoke: CPUParticles3D
 @export var embers: CPUParticles3D
 @export var flare_light: OmniLight3D
 @export var ash: CPUParticles3D
 @export var bats: CPUParticles3D
-## Feet, torso, head — the points ShadowSensor ray-casts from.
+## Foot-level footprint the ShadowSensor ray-casts from (matches ShadeGrid's
+## ground-point rule, so "standing on a shaded cell" = "not burning").
 @export var sample_points: Array[Node3D] = []
 ## burn_rim.tres (next_pass of the body/head materials); its intensity is animated.
 @export var rim_material: ShaderMaterial
@@ -54,38 +54,35 @@ enum RunState { IDLE, RUNNING, DYING, DEAD }
 @export var flare_light_energy: float = 9.0
 @export var disintegrate_time: float = 0.75
 @export var ash_linger_time: float = 0.4
-@export var stumble_time: float = 0.35
-@export var stumble_pitch_degrees: float = -80.0
 
 @export_group("Feel")
-@export var bob_height: float = 0.09
-@export var bob_cycles_per_meter: float = 0.42
-@export var lean_degrees: float = 9.0
+@export var bob_height: float = 0.07
+@export var bob_cycles_per_meter: float = 0.9
+@export var no_cue_degrees: float = 22.0
+@export var flinch_degrees: float = 14.0
 
 @export_group("Audio")
-@export var whoosh_sfx: AudioStream
+@export var hop_sfx: AudioStream
 @export var sizzle_sfx: AudioStream
 @export var death_sting_sfx: AudioStream
-@export var stumble_sfx: AudioStream
-
-## Meters per second, set every physics frame by ShadowRunFeature.
-var run_speed: float = 0.0
 
 var _haptics: HapticsManager
-var _state: RunState = RunState.IDLE
-var _lane: int = 1
-var _from_x: float = 0.0
-var _to_x: float = 0.0
-var _switch_elapsed: float = 0.0
-var _switching: bool = false
-var _queued_dir: int = 0
+var _state: State = State.IDLE
+var _points: PackedVector3Array = PackedVector3Array()
+var _hops: Array[bool] = []
+var _index: int = 0             # next point to reach
+var _speed: float = 0.0          # cruise speed for the current path
+var _cur_speed: float = 0.0      # actual speed (accelerates toward _speed)
+var _seg_from: Vector3
+var _seg_len: float = 0.0
+var _seg_travel: float = 0.0
+var _heading: float = 0.0
 var _bob_phase: float = 0.0
 var _exposure: float = 0.0
 var _exposure_rising: bool = false
 var _sizzle_timer: float = 0.0
 var _haptic_timer: float = 0.0
-# touch index (-1 for desktop mouse) -> drag anchor in screen space
-var _swipe_anchors: Dictionary = {}
+var _cue_tween: Tween
 
 func inject_services(registry: Node) -> void:
 	if not registry:
@@ -101,29 +98,75 @@ func _on_ready() -> void:
 	# burn_rim.tres is a shared resource that survives scene reloads: reset it.
 	rim_material.set_shader_parameter("intensity", 0.0)
 	flare_light.light_energy = 0.0
-	_lane = lanes.clamp_lane(lanes.start_lane)
-	position.x = lanes.lane_x(_lane)
-	_to_x = position.x
-	hitbox.body_entered.connect(_on_hitbox_body_entered)
-	set_process_unhandled_input(true)
 
 # ── Public API (called by ShadowRunFeature) ───────────────────────────────
 
-func start_running() -> void:
-	if _state == RunState.IDLE:
-		_state = RunState.RUNNING
+func activate() -> void:
+	if _state == State.IDLE:
+		_state = State.ACTIVE
 
-func is_running() -> bool:
-	return _state == RunState.RUNNING
+func is_active() -> bool:
+	return _state == State.ACTIVE
 
 func is_dead_or_dying() -> bool:
-	return _state == RunState.DYING or _state == RunState.DEAD
+	return _state == State.DYING or _state == State.DEAD
 
-func get_lane() -> int:
-	return _lane
+func is_moving() -> bool:
+	return _index < _points.size()
 
 func get_sample_points() -> Array[Node3D]:
 	return sample_points
+
+## Places Dracula without animation (level start).
+func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
+	global_position = world
+	_heading = facing_radians
+	visual.rotation.y = _heading
+	_points.clear()
+	_index = 0
+
+## Follow `points` (world positions, first = the first cell to step into).
+## hops[i] = true makes the step into points[i] a hop.
+func follow_path(points: PackedVector3Array, hops: Array[bool]) -> void:
+	if _state != State.ACTIVE or points.is_empty():
+		return
+	var length := 0.0
+	var prev := global_position
+	for p in points:
+		length += prev.distance_to(p)
+		prev = p
+	_speed = run_speed if length > run_threshold else walk_speed
+	if not is_moving():
+		_cur_speed = 0.0   # re-routes keep their momentum
+	_points = points
+	_hops = hops
+	_index = 0
+	_begin_segment()
+
+## Stop at the next waypoint (used when a sun drag starts mid-move).
+func stop_at_next_waypoint() -> void:
+	if is_moving():
+		_points.resize(_index + 1)
+		_hops.resize(_index + 1)
+
+## Short head-shake: "can't go there".
+func play_no_cue() -> void:
+	var base := _heading
+	var a := deg_to_rad(no_cue_degrees)
+	_kick_cue(func(tw: Tween) -> void:
+		tw.tween_property(visual, "rotation:y", base + a, 0.07)
+		tw.tween_property(visual, "rotation:y", base - a, 0.12)
+		tw.tween_property(visual, "rotation:y", base, 0.08))
+	if _haptics:
+		_haptics.light()
+
+## Recoil from the sun (the guard refused a sun move).
+func play_flinch() -> void:
+	_kick_cue(func(tw: Tween) -> void:
+		tw.tween_property(visual, "rotation:x", deg_to_rad(flinch_degrees), 0.06)
+		tw.tween_property(visual, "rotation:x", 0.0, 0.18))
+	if _haptics:
+		_haptics.light()
 
 ## exposure 0..100, fraction = lit sample points / total this frame.
 func set_burn_state(exposure: float, exposure_fraction: float) -> void:
@@ -140,19 +183,12 @@ func set_burn_state(exposure: float, exposure_fraction: float) -> void:
 	embers.color = Color(1.0, 1.0, 1.0, k)
 	smoke.speed_scale = 0.6 + k
 
-## Lane request from input (dir = -1 left, +1 right). Public so tests/bots can drive Dracula.
-func request_lane_change(dir: int) -> void:
-	if _state != RunState.RUNNING and _state != RunState.IDLE:
-		return
-	if _switching:
-		_queued_dir = dir   # buffer exactly one extra move
-		return
-	_begin_switch(dir)
-
 func play_burn_death() -> void:
 	if is_dead_or_dying():
 		return
-	_enter_dying()
+	_state = State.DYING
+	_points.clear()
+	_index = 0
 	if _haptics:
 		_haptics.heavy()
 	if _audio and death_sting_sfx:
@@ -175,67 +211,57 @@ func play_burn_death() -> void:
 	tw.tween_interval(ash_linger_time)
 	tw.tween_callback(_finish_death.bind("sunlight"))
 
-func play_obstacle_death() -> void:
-	if is_dead_or_dying():
-		return
-	_enter_dying()
-	if _haptics:
-		_haptics.heavy()
-	if _audio and stumble_sfx:
-		_audio.play_sfx(stumble_sfx)
-	var tw := create_tween()
-	tw.tween_property(visual, "rotation:x", deg_to_rad(stumble_pitch_degrees), stumble_time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(visual, "position:z", -0.5, stumble_time)
-	tw.tween_property(visual, "position:y", 0.12, 0.12)
-	tw.tween_property(visual, "position:y", 0.0, 0.12)
-	tw.tween_interval(0.25)
-	tw.tween_callback(_finish_death.bind("obstacle"))
-
 # ── Movement ──────────────────────────────────────────────────────────────
 
 func _move(delta: float) -> void:
-	if _state != RunState.RUNNING:
-		velocity = Vector3.ZERO
+	velocity = Vector3.ZERO
+	if _state != State.ACTIVE:
 		return
-	velocity = Vector3(0.0, 0.0, -run_speed)
-	_update_lane_slide(delta)
-	_update_bob(delta)
 	_update_burn_pulses(delta)
-
-func _begin_switch(dir: int) -> void:
-	var target := lanes.clamp_lane(_lane + dir)
-	if target == _lane:
-		return   # swipe past the road edge: ignored, no slide, no feedback
-	_lane = target
-	_from_x = position.x
-	_to_x = lanes.lane_x(_lane)
-	_switch_elapsed = 0.0
-	_switching = true
-	# Registers immediately (same frame as the input); the slide is cosmetic.
-	lane_committed.emit(_lane)
-	if _haptics:
-		_haptics.light()
-	if _audio and whoosh_sfx:
-		_audio.play_sfx(whoosh_sfx, -6.0, randf_range(0.92, 1.08))
-
-func _update_lane_slide(delta: float) -> void:
-	if not _switching:
-		visual.rotation.z = lerpf(visual.rotation.z, 0.0, minf(1.0, delta * 14.0))
+	if not is_moving():
+		visual.position.y = lerpf(visual.position.y, 0.0, minf(1.0, delta * 12.0))
 		return
-	_switch_elapsed += delta
-	var t := clampf(_switch_elapsed / lane_switch_time, 0.0, 1.0)
-	position.x = lerpf(_from_x, _to_x, smoothstep(0.0, 1.0, t))
-	visual.rotation.z = -signf(_to_x - _from_x) * deg_to_rad(lean_degrees) * sin(t * PI)
+	var hopping: bool = _hops[_index]
+	# Accelerate toward cruise speed; brake so he arrives at the last point, not past it.
+	var brake := sqrt(2.0 * acceleration * _remaining_distance())
+	_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 1.0))
+	var speed := _seg_len / maxf(hop_time, 0.05) if hopping else _cur_speed
+	_seg_travel = minf(_seg_travel + speed * delta, _seg_len)
+	var t := _seg_travel / _seg_len if _seg_len > 0.0001 else 1.0
+	var target := _points[_index]
+	var flat := _seg_from.lerp(target, t)
+	global_position = Vector3(flat.x, target.y, flat.z)
+	if hopping:
+		visual.position.y = sin(t * PI) * hop_height
+	else:
+		_bob_phase += speed * delta * bob_cycles_per_meter * TAU
+		visual.position.y = absf(sin(_bob_phase)) * bob_height
+	var d := target - _seg_from
+	if Vector2(d.x, d.z).length() > 0.01:
+		_heading = atan2(-d.x, -d.z)
+	visual.rotation.y = lerp_angle(visual.rotation.y, _heading, minf(1.0, turn_speed * delta))
 	if t >= 1.0:
-		_switching = false
-		if _queued_dir != 0:
-			var dir := _queued_dir
-			_queued_dir = 0
-			_begin_switch(dir)
+		_index += 1
+		if is_moving():
+			_begin_segment()
+		else:
+			_points.clear()
+			_index = 0
+			_cur_speed = 0.0
+			arrived.emit()
 
-func _update_bob(delta: float) -> void:
-	_bob_phase += delta * run_speed * bob_cycles_per_meter * TAU
-	visual.position.y = absf(sin(_bob_phase)) * bob_height
+func _remaining_distance() -> float:
+	var d := _seg_len - _seg_travel
+	for i in range(_index + 1, _points.size()):
+		d += _points[i - 1].distance_to(_points[i])
+	return d
+
+func _begin_segment() -> void:
+	_seg_from = global_position
+	_seg_len = _seg_from.distance_to(_points[_index])
+	_seg_travel = 0.0
+	if _hops[_index] and _audio and hop_sfx:
+		_audio.play_sfx(hop_sfx, -4.0)
 
 func _update_burn_pulses(delta: float) -> void:
 	if not _exposure_rising:
@@ -253,66 +279,13 @@ func _update_burn_pulses(delta: float) -> void:
 		if _haptics:
 			_haptics.medium()
 
-func _enter_dying() -> void:
-	_state = RunState.DYING
-	_switching = false
-	_queued_dir = 0
-	velocity = Vector3.ZERO
-	hitbox.set_deferred("monitoring", false)
+func _kick_cue(build: Callable) -> void:
+	if _cue_tween and _cue_tween.is_valid():
+		_cue_tween.kill()
+	_cue_tween = create_tween()
+	build.call(_cue_tween)
 
 func _finish_death(cause: String) -> void:
-	_state = RunState.DEAD
+	_state = State.DEAD
 	die()
 	death_finished.emit(cause)
-
-func _on_hitbox_body_entered(body: Node3D) -> void:
-	if _state == RunState.RUNNING:
-		obstacle_hit.emit(body)
-
-# ── Input: keys + swipe (touch and desktop mouse) ─────────────────────────
-# Touches that start inside the SunControl strip are consumed in its _input(),
-# so everything that reaches _unhandled_input here is a swipe candidate.
-
-func _unhandled_input(event: InputEvent) -> void:
-	if _state != RunState.RUNNING:
-		return
-	if event.is_action_pressed("move_left", false, true):
-		request_lane_change(-1)
-		get_viewport().set_input_as_handled()
-		return
-	if event.is_action_pressed("move_right", false, true):
-		request_lane_change(1)
-		get_viewport().set_input_as_handled()
-		return
-	# Skip mouse<->touch emulation duplicates so one finger is never two swipes.
-	if event.device == InputEvent.DEVICE_ID_EMULATION:
-		return
-	if event is InputEventScreenTouch:
-		var st := event as InputEventScreenTouch
-		if st.pressed:
-			_swipe_anchors[st.index] = st.position
-		else:
-			_swipe_anchors.erase(st.index)
-	elif event is InputEventScreenDrag:
-		var sd := event as InputEventScreenDrag
-		_track_swipe(sd.index, sd.position)
-	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		var mb := event as InputEventMouseButton
-		if mb.pressed:
-			_swipe_anchors[-1] = mb.position
-		else:
-			_swipe_anchors.erase(-1)
-	elif event is InputEventMouseMotion and _swipe_anchors.has(-1):
-		_track_swipe(-1, (event as InputEventMouseMotion).position)
-
-func _track_swipe(index: int, pos: Vector2) -> void:
-	if not _swipe_anchors.has(index):
-		return
-	var anchor: Vector2 = _swipe_anchors[index]
-	var d := pos - anchor
-	var threshold := get_viewport().get_visible_rect().size.x * swipe_threshold_fraction
-	if absf(d.x) >= threshold and absf(d.x) >= absf(d.y) * swipe_horizontal_ratio:
-		request_lane_change(1 if d.x > 0.0 else -1)
-		# Re-anchor so one long drag can switch two lanes without lifting the finger.
-		_swipe_anchors[index] = pos
-		get_viewport().set_input_as_handled()

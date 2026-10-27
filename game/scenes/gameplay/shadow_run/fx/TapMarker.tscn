@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/fx/TapMarker.gd" id="1_tap"]
+[ext_resource type="Material" path="res://game/assets/materials/tap_ok.tres" id="2_ok"]
+[ext_resource type="Material" path="res://game/assets/materials/tap_fail.tres" id="3_fail"]
+
+[sub_resource type="TorusMesh" id="Mesh_ring"]
+inner_radius = 0.32
+outer_radius = 0.42
+rings = 24
+ring_segments = 4
+
+[node name="TapMarker" type="Node3D" node_paths=PackedStringArray("ring")]
+script = ExtResource("1_tap")
+ring = NodePath("Ring")
+ok_material = ExtResource("2_ok")
+fail_material = ExtResource("3_fail")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+cast_shadow = 0
+mesh = SubResource("Mesh_ring")

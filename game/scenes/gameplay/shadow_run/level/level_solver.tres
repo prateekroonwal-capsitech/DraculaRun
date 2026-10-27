@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="LevelSolver" format=3 uid="uid://d3kagmdfqi1ib"]
+
+[ext_resource type="Script" uid="uid://bgnts7n42n1of" path="res://game/scenes/gameplay/shadow_run/level/LevelSolver.gd" id="1_solver"]
+
+[resource]
+script = ExtResource("1_solver")

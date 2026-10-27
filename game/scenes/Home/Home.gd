@@ -3,7 +3,8 @@ extends UIController
 
 ## HomeScene — Default landing scene transitioned to by BootScene.
 
-const SHADOW_RUN_SCENE := "res://game/scenes/gameplay/shadow_run/ShadowRun.tscn"
+## First puzzle level (a level-select screen can replace this later).
+const FIRST_LEVEL_SCENE := "res://game/scenes/gameplay/shadow_run/levels/Level01.tscn"
 
 @onready var label: Label = $CenterContainer/VBoxContainer/Label
 @onready var sub_label: Label = $CenterContainer/VBoxContainer/SubLabel
@@ -33,12 +34,10 @@ func _on_ready() -> void:
 		_logger.info("HomeScene loaded successfully.")
 	play_button.pressed.connect(_on_play_pressed)
 	play_button.grab_focus.call_deferred()
-	if _save and _save.stats_data:
-		var best := float(_save.stats_data.custom.get("best_distance", 0.0))
-		var runs := _save.stats_data.matches_played
-		sub_label.text = "Best  %d m   ·   Runs  %d" % [int(best), runs] if runs > 0 else "Stay in the shade."
+	if _save and _save.get_level() > 1:
+		sub_label.text = "Levels cleared: %d" % (_save.get_level() - 1)
 
 func _on_play_pressed() -> void:
 	play_button.disabled = true
 	if _scene:
-		_scene.go_to(SHADOW_RUN_SCENE)
+		_scene.go_to(FIRST_LEVEL_SCENE)

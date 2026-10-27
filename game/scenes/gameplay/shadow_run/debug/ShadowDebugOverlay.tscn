@@ -2,8 +2,20 @@
 
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/debug/ShadowDebugOverlay.gd" id="1_dbg"]
 [ext_resource type="Material" path="res://game/assets/materials/debug_ray.tres" id="2_mat"]
+[ext_resource type="Material" path="res://game/assets/materials/debug_cell.tres" id="3_cell"]
 
 [sub_resource type="ImmediateMesh" id="Mesh_rays"]
+
+[sub_resource type="QuadMesh" id="Mesh_cell"]
+material = ExtResource("3_cell")
+size = Vector2(1, 1)
+orientation = 1
+
+[sub_resource type="MultiMesh" id="MultiMesh_cells"]
+resource_local_to_scene = true
+transform_format = 1
+use_colors = true
+mesh = SubResource("Mesh_cell")
 
 [sub_resource type="StyleBoxFlat" id="Style_info"]
 bg_color = Color(0, 0, 0, 0.55)
@@ -12,11 +24,16 @@ content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
 
-[node name="ShadowDebugOverlay" type="Node3D" node_paths=PackedStringArray("ray_mesh", "info_layer", "info_label")]
+[node name="ShadowDebugOverlay" type="Node3D" node_paths=PackedStringArray("cell_mesh", "ray_mesh", "info_layer", "info_label")]
 script = ExtResource("1_dbg")
+cell_mesh = NodePath("CellMesh")
 ray_mesh = NodePath("RayMesh")
 info_layer = NodePath("InfoLayer")
 info_label = NodePath("InfoLayer/InfoPanel/InfoLabel")
+
+[node name="CellMesh" type="MultiMeshInstance3D" parent="."]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_cells")
 
 [node name="RayMesh" type="MeshInstance3D" parent="."]
 cast_shadow = 0

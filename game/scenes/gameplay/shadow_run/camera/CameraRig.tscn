@@ -3,10 +3,18 @@
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/camera/RunCameraController.gd" id="1_cam"]
 
 [node name="CameraRig" type="Camera3D"]
-editor_description = "Portrait chase camera. keep_aspect = Keep Width: fov is the HORIZONTAL angle, so all 3 lanes plus the roadside shadows fill the width; taller screens see further ahead. Tune height / distance / pitch_degrees / fov in the inspector."
-transform = Transform3D(1, 0, 0, 0, 0.788, 0.616, 0, -0.616, 0.788, 0, 11, 9)
+editor_description = "Angled top-down follow camera. keep_aspect = Keep Width: fov is the HORIZONTAL angle so the whole level width (12 m) always fits; taller screens see further ahead. X centres on the level; Z follows Dracula. Tune height / distance / pitch_degrees / fov / forward_smoothing in the inspector."
+transform = Transform3D(1, 0, 0, 0, 0.574, 0.819, 0, -0.819, 0.574, 0, 15, 6)
 keep_aspect = 0
 current = true
-fov = 50.0
-far = 260.0
+fov = 46.0
+far = 160.0
 script = ExtResource("1_cam")
+height = 14.0
+distance = 5.5
+pitch_degrees = 55.0
+lateral_follow = 0.0
+forward_smoothing = 4.0
+death_height = 9.0
+death_distance = 4.5
+death_pitch_degrees = 50.0

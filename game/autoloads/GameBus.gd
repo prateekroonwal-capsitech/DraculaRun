@@ -19,15 +19,10 @@ signal game_over(reason: String)
 signal level_started(level_id: String)
 signal level_completed(level_id: String)
 
-# ── Runner (Shadow Run) ───────────────────────────────────────────────────
+# ── Shadow Run ────────────────────────────────────────────────────────────
 ## Sun exposure meter changed. value is 0..100; 100 means Dracula burns.
 ## Emitted only on meaningful changes (see ShadowSensor.emit_step), not every frame.
 signal sun_exposure_changed(value: float)
-## Dracula committed to a new lane (0 = leftmost). Fires when the input registers,
-## not when the slide animation finishes.
-signal lane_changed(lane: int)
-## Run distance in meters. Emitted when the whole-meter value changes.
-signal distance_changed(meters: float)
 ## A power-up was picked up. Reserved for post-prototype power-ups; nothing emits it yet.
 signal powerup_collected(id: String)
 

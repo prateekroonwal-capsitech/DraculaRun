@@ -1,48 +1,55 @@
 class_name ShadowDebugOverlay
 extends Node3D
 
-## F3 (or the faint "dbg" HUD button) toggles this overlay; it starts hidden.
-## It draws ShadowSensor's sample rays toward the sun — GREEN = blocked by a shadow
-## caster (shaded), RED = reaches the sky (lit) — and lists exposure, sun angles,
-## speed and the current segment, plus a marker line down the center of every lane
-## (from LaneConfig; Dracula's current lane is highlighted). Use it to confirm rendered shadows and gameplay
-## shade agree: when Dracula's body sits in a visible shadow every ray must be green.
-## The nodes live in ShadowDebugOverlay.tscn; the only thing built at runtime is the
-## per-frame ray line geometry (debug-only ImmediateMesh surfaces).
+## F3 (or the optional "dbg" HUD button) toggles this overlay in DEBUG builds only;
+## it starts hidden and cannot be opened in release builds.
+## It shows the ShadeGrid's gameplay truth on top of the rendered level so the two can
+## be compared at a glance:
+##   * every cell as a small quad — GREEN walkable (shaded), ORANGE sunlit, GREY solid,
+##     BLUE outline = the region Dracula can currently reach
+##   * the path Dracula is following (white line) and ShadowSensor's foot rays
+##     (green = shaded, red = lit)
+##   * sun angles, grid size / variable cells, exposure, fps
+## Rendered shadows and green cells must coincide; a red ray under a green cell = bug.
+## Nodes live in ShadowDebugOverlay.tscn; at runtime only per-instance colours and the
+## debug line geometry (ImmediateMesh) are written.
 ## PDF §4 CPU: _process runs only while the overlay is visible.
 
-## Drawn ray length (the sensor itself uses ShadowSensor.ray_length).
-@export var draw_length: float = 9.0
-@export var shaded_color: Color = Color.GREEN
-@export var lit_color: Color = Color.RED
-## Lane layout (track/lane_config.tres) for the lane-center markers.
-@export var lanes: LaneConfig
-@export var lane_color: Color = Color(0.3, 0.8, 1.0, 0.8)
-@export var current_lane_color: Color = Color(1.0, 1.0, 0.3, 1.0)
-## How far ahead of Dracula the lane markers are drawn, meters.
-@export var lane_marker_length: float = 40.0
+@export var draw_length: float = 6.0
+@export var walkable_color: Color = Color(0.2, 0.95, 0.35, 0.45)
+@export var lit_color: Color = Color(1.0, 0.55, 0.1, 0.35)
+@export var solid_color: Color = Color(0.5, 0.5, 0.55, 0.45)
+@export var region_color: Color = Color(0.3, 0.6, 1.0, 0.6)
+@export var path_color: Color = Color.WHITE
+@export var cell_mesh: MultiMeshInstance3D
 @export var ray_mesh: MeshInstance3D
 @export var info_layer: CanvasLayer
 @export var info_label: Label
 
+var _grid: ShadeGrid
 var _sensor: ShadowSensor
 var _sun: SunRig
 var _dracula: DraculaController
-var _spawner: TrackSpawner
-var _feature: Node   # ShadowRunFeature (speed / run time / distance getters)
+var _feature: Node   # ShadowRunFeature (current_path / region_mask getters)
+var _cells_dirty: bool = true
 
 func _ready() -> void:
 	_set_shown(false)
 
-func setup(sensor: ShadowSensor, sun: SunRig, dracula: DraculaController, spawner: TrackSpawner, feature: Node) -> void:
+func setup(grid: ShadeGrid, sensor: ShadowSensor, sun: SunRig, dracula: DraculaController, feature: Node) -> void:
+	_grid = grid
 	_sensor = sensor
 	_sun = sun
 	_dracula = dracula
-	_spawner = spawner
 	_feature = feature
+	_cells_dirty = true
+
+func mark_dirty() -> void:
+	_cells_dirty = true
 
 func toggle() -> void:
-	_set_shown(not visible)
+	if OS.is_debug_build():
+		_set_shown(not visible)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_debug_overlay"):
@@ -53,35 +60,57 @@ func _set_shown(shown: bool) -> void:
 	visible = shown
 	info_layer.visible = shown
 	set_process(shown)   # PDF §4
+	_cells_dirty = true
 	if not shown:
 		(ray_mesh.mesh as ImmediateMesh).clear_surfaces()
 
 func _process(_delta: float) -> void:
-	if _sensor == null:
+	if _grid == null or _grid.cols == 0:
 		return
+	if _cells_dirty:
+		_cells_dirty = false
+		_draw_cells()
+	_draw_lines()
+	info_label.text = "\n".join([
+		"sun az %6.1f (target %6.1f)  el %4.1f" % [_sun.azimuth, _sun.target_azimuth, _sun.elevation],
+		"grid %dx%d @ %.2fm  variable %d" % [_grid.cols, _grid.rows, _grid.cell_size, _grid.variable_cell_count()],
+		"exposure %5.1f%%  lit points %d/%d" % [_sensor.exposure, roundi(_sensor.exposure_fraction * _sensor.debug_lit.size()), _sensor.debug_lit.size()],
+		"fps %d  nodes %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)],
+	])
+
+func _draw_cells() -> void:
+	var mm := cell_mesh.multimesh
+	if mm.instance_count != _grid.cell_count():
+		mm.instance_count = _grid.cell_count()
+	var region: PackedByteArray = _feature.region_mask()
+	for i in _grid.cell_count():
+		@warning_ignore("integer_division")
+		var c := Vector2i(i % _grid.cols, i / _grid.cols)
+		var col := solid_color if _grid.is_solid(c) else (walkable_color if _grid.is_shaded(c) else lit_color)
+		if region.size() == _grid.cell_count() and region[i] != 0:
+			col = region_color
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * _grid.cell_size * 0.85), _grid.cell_center(c) + Vector3(0.0, 0.05, 0.0)))
+		mm.set_instance_color(i, col)
+
+func _draw_lines() -> void:
 	var mesh := ray_mesh.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	if lanes and _dracula:
-		var z := _dracula.global_position.z
-		for i in lanes.lane_count:
-			var x := lanes.lane_x(i)
-			mesh.surface_set_color(current_lane_color if i == _dracula.get_lane() else lane_color)
-			mesh.surface_add_vertex(Vector3(x, 0.05, z + 2.0))
-			mesh.surface_add_vertex(Vector3(x, 0.05, z - lane_marker_length))
-	if not _sensor.debug_from.is_empty():
-		for i in _sensor.debug_from.size():
-			var from := _sensor.debug_from[i]
-			var dir := (_sensor.debug_to[i] - from).normalized()
-			mesh.surface_set_color(lit_color if _sensor.debug_lit[i] else shaded_color)
-			mesh.surface_add_vertex(from)
-			mesh.surface_add_vertex(from + dir * draw_length)
+	var path: PackedVector3Array = _feature.current_path()
+	var prev := _dracula.global_position
+	for p in path:
+		mesh.surface_set_color(path_color)
+		mesh.surface_add_vertex(prev + Vector3(0.0, 0.12, 0.0))
+		mesh.surface_add_vertex(p + Vector3(0.0, 0.12, 0.0))
+		prev = p
+	for i in _sensor.debug_from.size():
+		var from := _sensor.debug_from[i]
+		var dir := (_sensor.debug_to[i] - from).normalized()
+		mesh.surface_set_color(Color.RED if _sensor.debug_lit[i] else Color.GREEN)
+		mesh.surface_add_vertex(from)
+		mesh.surface_add_vertex(from + dir * draw_length)
+	# Keep the surface valid even with nothing to draw.
+	mesh.surface_set_color(path_color)
+	mesh.surface_add_vertex(Vector3.ZERO)
+	mesh.surface_add_vertex(Vector3.ZERO)
 	mesh.surface_end()
-	var seg := _spawner.segment_at(_dracula.global_position.z) if _spawner else null
-	info_label.text = "\n".join([
-		"exposure %5.1f%%  lit %d/%d" % [_sensor.exposure, roundi(_sensor.exposure_fraction * _sensor.debug_lit.size()), _sensor.debug_lit.size()],
-		"sun az %6.1f el %5.1f (target %6.1f / %5.1f)" % [_sun.azimuth, _sun.elevation, _sun.target_azimuth, _sun.target_elevation],
-		"speed %5.2f m/s  t %6.1f s  d %7.1f m" % [_feature.current_speed(), _feature.run_time(), _feature.distance()],
-		"lane %d/%d  segment %s" % [_dracula.get_lane(), lanes.lane_count - 1 if lanes else 0, String(seg.segment_id) if seg else "-"],
-		"fps %d  nodes %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)],
-	])

@@ -84,20 +84,20 @@ theme_override_font_sizes/font_size = 76
 text = "BURNED TO ASH"
 horizontal_alignment = 1
 
-[node name="Distance" type="Label" parent="Center/Panel/VBox"]
+[node name="Subtitle" type="Label" parent="Center/Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.93, 0.8, 1)
 theme_override_font_sizes/font_size = 54
-text = "Distance  0 m"
+text = "Level 1"
 horizontal_alignment = 1
 
-[node name="Best" type="Label" parent="Center/Panel/VBox"]
+[node name="Detail" type="Label" parent="Center/Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.93, 0.8, 1)
 theme_override_font_sizes/font_size = 47
-text = "Best  0 m"
+text = "Stay in the shadows."
 horizontal_alignment = 1
 
 [node name="Buttons" type="HBoxContainer" parent="Center/Panel/VBox"]

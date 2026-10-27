@@ -1,11 +1,13 @@
 class_name RunCameraController
 extends Camera3D
 
-# RunCameraController — fixed third-person chase camera for Shadow Run (portrait).
+# RunCameraController — angled top-down follow camera for the shadow puzzles (portrait).
+# X is centred on the level (center_x, set by ShadowRunFeature) so the whole level width
+# stays visible; Z follows Dracula smoothly, keeping him in the lower-middle of the view.
 # Mirrors CameraController's API (follow / stop_follow / shake) for 3D; the
 # template's CameraController extends Camera2D so it cannot be reused directly.
 # The camera uses keep_aspect = KEEP_WIDTH (set in CameraRig.tscn): the horizontal
-# FOV is fixed, so every lane (LaneConfig) always fits and taller phones simply see further ahead.
+# FOV is fixed, so the whole level width always fits and taller phones simply see further ahead.
 # Ticks in _physics_process to stay in lockstep with Dracula (no follow jitter).
 # PDF §4 CPU: the physics tick is off until follow() or shake() gives it work.
 
@@ -14,10 +16,10 @@ extends Camera3D
 ## Distance behind the target along +Z, meters.
 @export var distance: float = 9.0
 ## Downward pitch in degrees (35–45 keeps Dracula in the lower third of the play view).
-@export_range(20.0, 70.0) var pitch_degrees: float = 38.0
-## How much of the target's lane offset the camera follows (0 = locked to road center).
+@export_range(20.0, 80.0) var pitch_degrees: float = 38.0
+## How much of the target's sideways offset (from center_x) the camera follows (0 = locked).
 @export_range(0.0, 1.0) var lateral_follow: float = 0.35
-## Lateral smoothing (higher = snappier). Kept low for a slight lag on lane changes.
+## Lateral smoothing (higher = snappier) when lateral_follow > 0.
 @export var lateral_smoothing: float = 6.0
 ## Forward smoothing. Very high while running so speed changes never cause drift.
 @export var forward_smoothing: float = 40.0
@@ -30,6 +32,8 @@ extends Camera3D
 var _target: Node3D = null
 var _shake_strength: float = 0.0
 var _shake_time: float = 0.0
+## World X the camera centres on (the level's centre line).
+var center_x: float = 0.0
 var _x: float = 0.0
 var _z: float = 0.0
 
@@ -39,7 +43,7 @@ func _ready() -> void:
 
 func follow(target: Node3D) -> void:
 	_target = target
-	_x = target.global_position.x * lateral_follow
+	_x = (target.global_position.x - center_x) * lateral_follow
 	_z = target.global_position.z
 	_apply()
 	set_physics_process(true)   # PDF §4: re-enable now that there is work to do
@@ -64,7 +68,7 @@ func shake(strength: float, duration: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _target:
 		var tp := _target.global_position
-		_x = lerpf(_x, tp.x * lateral_follow, minf(1.0, lateral_smoothing * delta))
+		_x = lerpf(_x, (tp.x - center_x) * lateral_follow, minf(1.0, lateral_smoothing * delta))
 		_z = lerpf(_z, tp.z, minf(1.0, forward_smoothing * delta))
 		_apply()
 
@@ -79,7 +83,7 @@ func _physics_process(delta: float) -> void:
 		_check_idle()
 
 func _apply() -> void:
-	global_position = Vector3(_x, height, _z + distance)
+	global_position = Vector3(center_x + _x, height, _z + distance)
 	global_rotation = Vector3(deg_to_rad(-pitch_degrees), 0.0, 0.0)
 
 # ── PDF §4: stop ticking when neither following nor shaking ───────────────

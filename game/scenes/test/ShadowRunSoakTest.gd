@@ -1,36 +1,46 @@
 extends Node
 
-## Retry soak test for Shadow Run: boots GameService (like Boot.tscn would), then
-## loads ShadowRun.tscn through SceneManager, pauses/resumes, dies and presses
-## Retry `iterations` times, checking that the node count, GameBus connections
-## and orphan nodes stay flat. Run headless:
+## End-to-end test for the Shadow Run puzzle levels. Boots GameService (like Boot.tscn),
+## loads Level01 through SceneManager and then:
+##   1. Level 1: pause/resume, a real tap via handle_tap(), an unreachable tap (no move),
+##      and the sun exposure guard (dragging toward an exposing angle must stop short
+##      and Dracula must take no exposure).
+##   2. Plays all levels by replaying LevelSolver's plan through the real game: moves go
+##      through ShadowRunFeature.move_to (same path as a tap), sun steps through SunRig with
+##      the drag start/end brackets SunControl uses. Each goal → Level Complete → Next.
+##   3. Death → Retry `retries` times on Level01, checking node count / GameBus connections.
+## Also checks the saved progression. Exit code 0 = everything passed.
 ##   godot --headless --path . res://game/scenes/test/ShadowRunSoakTest.tscn
-## Exit code 0 = stable. Run WITHOUT --headless to also check two-touch arbitration
-## (headless has no window, so injected touch positions are meaningless there).
 ## Test harness only: it is allowed to use ServiceRegistry.
 
-const RUN_SCENE := "res://game/scenes/gameplay/shadow_run/ShadowRun.tscn"
+const FIRST_LEVEL := "res://game/scenes/gameplay/shadow_run/levels/Level01.tscn"
+const SOLVER := preload("res://game/scenes/gameplay/shadow_run/level/level_solver.tres")
 
-@export var iterations: int = 10
-@export var run_seconds: float = 2.0
-## Allowed node-count drift between the first and the last iteration.
+@export var retries: int = 5
+@export var level_count: int = 3
 @export var node_tolerance: int = 4
+@export var step_timeout: float = 25.0
 
 var _registry: Node
 var _logger: Node
+var _failures: int = 0
 
 func _ready() -> void:
 	# The current scene is freed by every SceneManager.go_to(); run the driver from a
 	# root-level node instead.
-	var driver := Node.new()
-	driver.name = "SoakDriver"
-	driver.set_script(get_script())
-	driver.set_meta("is_driver", true)
 	if not has_meta("is_driver"):
+		var driver := Node.new()
+		driver.name = "SoakDriver"
+		driver.set_meta("is_driver", true)
+		driver.set_script(get_script())
 		get_tree().root.add_child.call_deferred(driver)
 		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_run.call_deferred()
+
+func _fail(msg: String) -> void:
+	_failures += 1
+	_logger.error("Soak: " + msg)
 
 func _run() -> void:
 	_registry = get_tree().root.get_node_or_null("ServiceRegistry")
@@ -43,153 +53,173 @@ func _run() -> void:
 	var ui := _registry.get_service(&"ui") as UIManager
 	var bus: Node = _registry.get_service(&"bus")
 	var save := _registry.get_service(&"save") as SaveManager
-	var runs_before := save.stats_data.matches_played
 	Engine.time_scale = 3.0
-	var counts: PackedInt32Array = []
-	var failures := 0
 
-	scene.go_to(RUN_SCENE)
-	var previous_id := 0
-	for i in iterations:
-		var feature := await _wait_for_feature(previous_id)
+	scene.go_to(FIRST_LEVEL)
+	var prev_id := 0
+	for li in level_count:
+		var feature := await _wait_for_feature(prev_id)
 		if feature == null:
-			_logger.error("Soak: ShadowRunFeature never appeared")
-			get_tree().quit(1)
-			return
-		# Wait for the countdown to finish and the run to start.
-		while not feature.is_running():
-			await get_tree().process_frame
-		previous_id = feature.get_instance_id()
-		var nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
-		var orphans := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-		counts.append(nodes)
-		_logger.info("Soak %d: nodes %d  orphans %d  game_started conns %d  exposure conns %d" % [
-			i, nodes, orphans, bus.game_started.get_connections().size(),
-			bus.sun_exposure_changed.get_connections().size()])
-		if i == 0:
-			# Exercise pause → resume once.
-			feature.request_pause()
-			await get_tree().process_frame
-			if not (ui.current() is PausePanel) or not get_tree().paused:
-				_logger.error("Soak: pause panel did not open / tree not paused")
-				failures += 1
-			else:
-				(ui.current() as PausePanel)._on_resume_pressed()
-				await get_tree().process_frame
-				if get_tree().paused:
-					_logger.error("Soak: tree still paused after resume")
-					failures += 1
-			failures += await _check_two_touch(feature)
-			failures += await _check_lane_edges(feature)
-		await get_tree().create_timer(run_seconds).timeout
-		feature.force_death("sunlight" if i % 2 == 0 else "obstacle")
-		var panel: GameOverPanel = null
-		var waited := 0.0
-		while panel == null and waited < 6.0:
-			await get_tree().process_frame
-			waited += get_process_delta_time()
-			panel = ui.current() as GameOverPanel
+			_fail("level %d never started" % (li + 1))
+			break
+		prev_id = feature.get_instance_id()
+		if li == 0:
+			await _check_basics(feature, ui)
+		await _play_level(feature)
+		var panel := await _wait_for_panel(ui, "LevelCompletePanel") as LevelCompletePanel
 		if panel == null:
-			_logger.error("Soak: Game Over panel never opened")
-			failures += 1
+			_fail("Level Complete panel did not open on level %d" % (li + 1))
+			break
+		_logger.info("Soak: level %d complete" % (li + 1))
+		panel.next_requested.emit()
+	if save.get_level() < level_count + 1:
+		_fail("progression not saved (current_level %d)" % save.get_level())
+
+	# "Finish" on the last level returns Home: wait for that load, then check stability.
+	while scene.is_loading() or not (get_tree().current_scene is HomeScene):
+		await get_tree().process_frame
+	# Death → Retry stability.
+	scene.go_to(FIRST_LEVEL)
+	var counts: PackedInt32Array = []
+	for i in retries:
+		var feature := await _wait_for_feature(prev_id)
+		if feature == null:
+			_fail("retry %d: level never started" % i)
+			break
+		prev_id = feature.get_instance_id()
+		counts.append(int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)))
+		feature.force_death()
+		var panel := await _wait_for_panel(ui, "GameOverPanel") as GameOverPanel
+		if panel == null:
+			_fail("Game Over panel never opened")
 			break
 		panel.retry_requested.emit()
-		await get_tree().process_frame
-
-	var runs_after := save.stats_data.matches_played
-	if runs_after - runs_before != iterations:
-		_logger.error("Soak: expected %d saved runs, got %d" % [iterations, runs_after - runs_before])
-		failures += 1
-	if counts.size() >= 2 and absi(counts[counts.size() - 1] - counts[1]) > node_tolerance:
-		_logger.error("Soak: node count drifted %d -> %d" % [counts[1], counts[counts.size() - 1]])
-		failures += 1
+	if counts.size() >= 2 and absi(counts[counts.size() - 1] - counts[0]) > node_tolerance:
+		_fail("node count drifted %s" % str(counts))
 	if bus.game_started.get_connections().size() > 1:
-		_logger.error("Soak: leaked GameBus.game_started connections")
-		failures += 1
-	_logger.info("Soak: best_distance=%s runs=%d" % [str(save.stats_data.custom.get("best_distance")), runs_after])
-	if failures == 0:
-		_logger.info("Soak: PASS (%d retries, node counts %s)" % [iterations, str(counts)])
-	else:
-		_logger.error("Soak: FAIL (%d problem(s))" % failures)
+		_fail("leaked GameBus.game_started connections")
 	Engine.time_scale = 1.0
-	get_tree().quit(1 if failures > 0 else 0)
+	if _failures == 0:
+		_logger.info("Soak: PASS (levels played: %d, retry node counts %s)" % [level_count, str(counts)])
+	else:
+		_logger.error("Soak: FAIL (%d problem(s))" % _failures)
+	get_tree().quit(1 if _failures > 0 else 0)
 
-## Touch arbitration: finger 0 starts in the sun strip and drags right while finger 1
-## swipes right in the play view. Expect: sun target moves right, Dracula moves
-## exactly ONE lane (finger 0's long horizontal drag must not count as a swipe).
-func _check_two_touch(feature: ShadowRunFeature) -> int:
-	# Headless has a 0x0 window, so the stretch transform scrambles touch positions.
-	# Run this soak in a window (no --headless) to exercise touch arbitration.
-	if DisplayServer.get_name() == "headless":
-		_logger.info("Soak: two-touch check SKIPPED (headless has no real window)")
-		return 0
-	var win := Vector2(DisplayServer.window_get_size())
-	var lane_before := feature.dracula.get_lane()
-	_touch(0, win * Vector2(0.5, 0.88), true)
-	_touch(1, win * Vector2(0.3, 0.5), true)
+# ── Level 1 basics ────────────────────────────────────────────────────────
+
+func _check_basics(f: ShadowRunFeature, ui: UIManager) -> void:
+	# Pause / resume.
+	f.request_pause()
 	await get_tree().process_frame
-	for k in 6:
-		_drag(0, win * Vector2(0.5 + 0.06 * (k + 1), 0.86))
-		_drag(1, win * Vector2(0.3 + 0.015 * (k + 1), 0.5))
+	if not (ui.current() is PausePanel) or not get_tree().paused:
+		_fail("pause panel did not open / tree not paused")
+	else:
+		(ui.current() as PausePanel)._on_resume_pressed()
 		await get_tree().process_frame
-	_touch(0, win * Vector2(0.86, 0.86), false)
-	_touch(1, win * Vector2(0.39, 0.5), false)
-	await get_tree().process_frame
-	var problems := 0
-	if feature.sun_rig.target_azimuth < 20.0:
-		_logger.error("Soak: sun strip drag did not move the sun right (target az %.1f)" % feature.sun_rig.target_azimuth)
-		problems += 1
-	if feature.dracula.get_lane() != lane_before + 1:
-		_logger.error("Soak: expected one lane change, got %d -> %d" % [lane_before, feature.dracula.get_lane()])
-		problems += 1
-	if problems == 0:
-		_logger.info("Soak: two-touch OK (sun target az %.1f, lane %d -> %d)" % [feature.sun_rig.target_azimuth, lane_before, feature.dracula.get_lane()])
-	return problems
+	# Unreachable tap: the goal is in sun at the start angle → no move.
+	f.move_to(f.level.goal.global_position)
+	await _wait_still(f)
+	if f.dracula.global_position.distance_to(f.level.start.global_position) > 0.6:
+		_fail("unreachable tap moved Dracula")
+	# Real tap through the input path: a walkable cell 2 m ahead, projected to the screen.
+	var grid := f.level.grid
+	var target := grid.nearest_walkable(grid.cell_at(f.dracula.global_position + Vector3(0.6, 0, -2.0)), 3)
+	var cam := get_viewport().get_camera_3d()
+	var screen := cam.unproject_position(grid.cell_center(target))
+	if f.hud.is_in_play_view(screen):
+		f.handle_tap(screen)
+		await _wait_still(f)
+		if f.dracula.global_position.distance_to(grid.cell_center(target)) > 0.35:
+			_fail("tap on a walkable cell did not move Dracula there")
+	else:
+		_logger.info("Soak: tap check skipped (target not in play view in this viewport)")
+	# Exposure guard: drag toward the far end; the sun must stop short, no exposure.
+	var blocked := [false]
+	var cb := func() -> void: blocked[0] = true
+	f.sun_rig.guard_blocked.connect(cb)
+	f._on_sun_drag_started()
+	f.sun_rig.set_target(f.level.azimuth_max, f.sun_rig.target_elevation)
+	await _wait_settled(f)
+	f._on_sun_drag_ended()
+	f.sun_rig.guard_blocked.disconnect(cb)
+	if not blocked[0] or f.sun_rig.azimuth >= f.level.azimuth_max - 0.5:
+		_fail("guard did not stop the sun (az %.1f)" % f.sun_rig.azimuth)
+	if f.sensor.exposure > 0.5:
+		_fail("Dracula took exposure while the guard was active (%.1f)" % f.sensor.exposure)
+	_logger.info("Soak: guard stopped the sun at az %.1f, exposure %.1f" % [f.sun_rig.azimuth, f.sensor.exposure])
+	# Back to the level's start angle (moving back toward safety is allowed).
+	f._on_sun_drag_started()
+	f.sun_rig.set_target(f.level.sun_start_azimuth, f.level.sun_start_elevation)
+	await _wait_settled(f)
+	f._on_sun_drag_ended()
+	await _wait_still(f)
 
-## Edge cases: bursts of key presses past both road edges (one starts a slide, the
-## rest hit the input buffer). Dracula must end on the outermost lane, exactly on its
-## center, with no overshoot. Lane count/positions come from the scene's LaneConfig.
-func _check_lane_edges(feature: ShadowRunFeature) -> int:
-	var lanes := feature.dracula.lanes
-	var problems := 0
-	for dir in [-1, 1]:
-		for _i in lanes.lane_count + 2:
-			var e := InputEventAction.new()
-			e.action = "move_left" if dir < 0 else "move_right"
-			e.pressed = true
-			Input.parse_input_event(e)
-			await get_tree().create_timer(0.06).timeout
-		await get_tree().create_timer(0.5).timeout
-		var want := 0 if dir < 0 else lanes.lane_count - 1
-		var lane := feature.dracula.get_lane()
-		var x := feature.dracula.position.x
-		if lane != want or absf(x - lanes.lane_x(want)) > 0.01:
-			_logger.error("Soak: edge test dir %d ended in lane %d at x %.2f (want lane %d at x %.2f)" % [dir, lane, x, want, lanes.lane_x(want)])
-			problems += 1
-	if problems == 0:
-		_logger.info("Soak: lane edges OK (%d lanes, clamped at 0 and %d)" % [lanes.lane_count, lanes.lane_count - 1])
-	return problems
+# ── Playthrough ───────────────────────────────────────────────────────────
 
-func _touch(index: int, pos: Vector2, pressed: bool) -> void:
-	var e := InputEventScreenTouch.new()
-	e.index = index
-	e.position = pos
-	e.pressed = pressed
-	Input.parse_input_event(e)
+func _play_level(f: ShadowRunFeature) -> void:
+	var r := SOLVER.solve(f.level)
+	if not r.solvable:
+		_fail("level %d unsolvable in game: %s" % [f.level.level_number, r.error])
+		return
+	var peak := 0.0
+	for step in r.plan:
+		if step.type == "move":
+			var cell: Vector2i = step.cell
+			var dest := f.level.grid.cell_center(cell)
+			f.move_to(dest)
+			peak = maxf(peak, await _wait_still(f))
+			if f._finished:
+				break
+			if f.dracula.global_position.distance_to(dest) > 0.35:
+				_fail("level %d: could not walk to %s (stuck at %s)" % [f.level.level_number, str(cell), str(f.dracula.global_position)])
+				return
+		else:
+			f._on_sun_drag_started()
+			f.sun_rig.set_target(step.azimuth, step.elevation)
+			await _wait_settled(f)
+			f._on_sun_drag_ended()
+			await _wait_still(f)
+			if absf(f.sun_rig.azimuth - step.azimuth) > 0.5 or absf(f.sun_rig.elevation - step.elevation) > 0.5:
+				_fail("level %d: guard stopped the planned sun move at %.1f/%.1f (wanted %.1f/%.1f)" % [
+					f.level.level_number, f.sun_rig.azimuth, f.sun_rig.elevation, step.azimuth, step.elevation])
+				return
+	_logger.info("Soak: level %d played (%d plan steps, peak exposure %.1f)" % [f.level.level_number, (r.plan as Array).size(), peak])
 
-func _drag(index: int, pos: Vector2) -> void:
-	var e := InputEventScreenDrag.new()
-	e.index = index
-	e.position = pos
-	Input.parse_input_event(e)
+## Waits until Dracula stops moving; returns the peak exposure seen meanwhile.
+func _wait_still(f: ShadowRunFeature) -> float:
+	var peak := 0.0
+	var t := 0.0
+	await get_tree().physics_frame
+	while not f.is_idle() and t < step_timeout:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+		peak = maxf(peak, f.sensor.exposure)
+	return peak
 
-## Waits for a NEW ShadowRunFeature (not the one from the scene being replaced).
+func _wait_settled(f: ShadowRunFeature) -> void:
+	var t := 0.0
+	await get_tree().physics_frame
+	while not f.sun_rig.is_settled() and t < step_timeout:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+
+func _wait_for_panel(ui: UIManager, cls: String) -> Control:
+	var t := 0.0
+	while t < step_timeout:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+		var c := ui.current()
+		if c and c.get_class() != "" and c.get_script() and (c.get_script() as Script).get_global_name() == cls:
+			return c
+	return null
+
+## Waits for a NEW, running ShadowRunFeature (not the one from the scene being replaced).
 func _wait_for_feature(previous_id: int) -> ShadowRunFeature:
-	for _i in 600:
+	for _i in 900:
 		await get_tree().process_frame
 		var cs := get_tree().current_scene
-		if cs and cs.name == "ShadowRun":
-			var f := cs.get_node_or_null("ShadowRunFeature") as ShadowRunFeature
-			if f and f.is_inside_tree() and f.get_instance_id() != previous_id:
+		if cs and cs is ShadowLevel:
+			var f := cs.get_node_or_null("Game/ShadowRunFeature") as ShadowRunFeature
+			if f and f.get_instance_id() != previous_id and f.is_running():
 				return f
 	return null

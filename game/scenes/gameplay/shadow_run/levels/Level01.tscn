@@ -1,0 +1,92 @@
+[gd_scene format=3 uid="uid://c5q4tg3hghs2l"]
+
+[ext_resource type="Script" uid="uid://cnfg1d6cpskfu" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_level"]
+[ext_resource type="Script" uid="uid://chx30tfrxneem" path="res://game/scenes/gameplay/shadow_run/level/ShadeGrid.gd" id="2_grid"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/ShadowRun.tscn" id="3_game"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/goal/CryptDoor.tscn" id="4_goal"]
+[ext_resource type="Material" path="res://game/assets/materials/ground_ochre.tres" id="5_ground"]
+[ext_resource type="Material" path="res://game/assets/materials/ground_edge.tres" id="6_edge"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/building_facade.tscn" id="p0"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/building_facade_short.tscn" id="p1"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/statue.tscn" id="p2"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/tree.tscn" id="p3"]
+
+[sub_resource type="BoxMesh" id="Mesh_ground"]
+size = Vector3(12, 0.2, 54)
+
+[sub_resource type="BoxMesh" id="Mesh_edge"]
+size = Vector3(14, 0.2, 90)
+
+[sub_resource type="BoxShape3D" id="Shape_ground"]
+size = Vector3(40, 0.2, 90)
+
+[node name="Level01" type="Node3D" unique_id=1341898277 node_paths=PackedStringArray("start", "goal", "grid")]
+editor_description = "Puzzle level. Move Start / Goal / casters freely; keep the ShadeGrid covering the walkable floor. Run level/LevelValidatorRunner.tscn after edits."
+script = ExtResource("1_level")
+level_title = "The Gargoyle"
+next_level = "res://game/scenes/gameplay/shadow_run/levels/Level02.tscn"
+hint = "Drag the sun in the strip below. Rest in the statue's shadow while you turn it."
+start = NodePath("Start")
+goal = NodePath("Goal")
+grid = NodePath("ShadeGrid")
+
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1701560969]
+collision_mask = 0
+
+[node name="Floor" type="MeshInstance3D" parent="Ground" unique_id=2087364542]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -25)
+mesh = SubResource("Mesh_ground")
+surface_material_override/0 = ExtResource("5_ground")
+
+[node name="OuterL" type="MeshInstance3D" parent="Ground" unique_id=1769140111]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, -0.12, -25)
+mesh = SubResource("Mesh_edge")
+surface_material_override/0 = ExtResource("6_edge")
+
+[node name="OuterR" type="MeshInstance3D" parent="Ground" unique_id=1869623992]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, -0.12, -25)
+mesh = SubResource("Mesh_edge")
+surface_material_override/0 = ExtResource("6_edge")
+
+[node name="GroundShape" type="CollisionShape3D" parent="Ground" unique_id=251404483]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -25)
+shape = SubResource("Shape_ground")
+
+[node name="ShadeGrid" type="Node3D" parent="." unique_id=572635175]
+editor_description = "Walkable ground grid: covers x 0..size.x, z 0..-size.y from this node. Cell = 0.4 m."
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 1.5)
+script = ExtResource("2_grid")
+
+[node name="Start" type="Marker3D" parent="." unique_id=1552220506]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -3)
+
+[node name="Goal" parent="." unique_id=191369758 instance=ExtResource("4_goal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, -43.5)
+
+[node name="Props" type="Node3D" parent="." unique_id=1462757673]
+
+[node name="building_facade_0" parent="Props" unique_id=994909624 instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.6, 0, -5)
+
+[node name="building_facade_1" parent="Props" unique_id=66484453 instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.6, 0, -15)
+
+[node name="building_facade_short_2" parent="Props" unique_id=37377068 instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.1, 0, -24.5)
+
+[node name="statue_3" parent="Props" unique_id=702621481 instance=ExtResource("p2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -21)
+
+[node name="building_facade_4" parent="Props" unique_id=1985829753 instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.6, 0, -31)
+
+[node name="building_facade_5" parent="Props" unique_id=371241955 instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.6, 0, -41)
+
+[node name="tree_6" parent="Props" unique_id=1432787220 instance=ExtResource("p3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.5, 0, -32)
+
+[node name="tree_7" parent="Props" unique_id=873416271 instance=ExtResource("p3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.6, 0, -9)
+
+[node name="Game" parent="." unique_id=79143881 instance=ExtResource("3_game")]
