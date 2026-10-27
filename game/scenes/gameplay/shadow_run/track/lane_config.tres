@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="LaneConfig" format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/LaneConfig.gd" id="1_lanes"]
+
+[resource]
+script = ExtResource("1_lanes")
+lane_count = 3
+lane_width = 2.5
+start_lane = 1

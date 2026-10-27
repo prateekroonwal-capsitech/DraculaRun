@@ -13,3 +13,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_sun")
+drag_sensitivity = 1.3
+key_azimuth_speed = 135.0
+key_elevation_speed = 135.0

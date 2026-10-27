@@ -13,6 +13,7 @@
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/BurnFX.tscn" id="11_burn"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DeathFX.tscn" id="12_death"]
 [ext_resource type="Material" path="res://game/assets/materials/burn_rim.tres" id="13_rim"]
+[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/lane_config.tres" id="14_lanes"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]
 radius = 0.3
@@ -49,6 +50,7 @@ collision_layer = 2
 collision_mask = 0
 motion_mode = 1
 script = ExtResource("1_ctrl")
+lanes = ExtResource("14_lanes")
 visual = NodePath("Visual")
 hitbox = NodePath("HitBox")
 smoke = NodePath("BurnFX/Smoke")

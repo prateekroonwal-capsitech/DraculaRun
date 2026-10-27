@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="GameTemplate"
+config/name="DraculaRun"
 run/main_scene="res://game/scenes/boot/Boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"

@@ -15,6 +15,8 @@ extends UIController
 ## Touches starting anywhere else are left alone (swipe candidates). Two touches at
 ## once work: one thumb here, the other swiping in the play view.
 ## Desktop: mouse drag here, Q/E (azimuth), R/F (elevation).
+## Dragging is RELATIVE: touching does not jump the sun; moving the finger turns it
+## by (finger travel / strip span) x full angle range x drag_sensitivity.
 ## The strip only sets the SunRig *target*; the rig enforces the max angular speed.
 
 ## Sun icon radius in px (>= 70 → icon >= 140 px wide).
@@ -28,8 +30,11 @@ extends UIController
 @export_range(0.0, 0.5) var arc_sag: float = 0.12
 ## Ground line (Dracula + shadow hint), fraction of the strip height.
 @export_range(0.0, 1.0) var ground_y: float = 0.93
-@export var key_azimuth_speed: float = 90.0
-@export var key_elevation_speed: float = 45.0
+## >1 turns the sun further for the same finger travel (1.0 = strip span = full range).
+@export var drag_sensitivity: float = 1.3
+## Q/E and R/F speeds in °/s (match SunRig's max speeds).
+@export var key_azimuth_speed: float = 135.0
+@export var key_elevation_speed: float = 135.0
 @export var strip_color: Color = Color(0.07, 0.04, 0.12, 0.82)
 @export var guide_color: Color = Color(1.0, 0.86, 0.55, 0.35)
 @export var sun_color: Color = Color(1.0, 0.8, 0.28, 1.0)
@@ -37,7 +42,7 @@ extends UIController
 @export var label_font_size: int = 26
 
 var _sun: SunRig
-var _owned_touches: Dictionary = {}   # touch index (-1 = mouse) -> true
+var _owned_touches: Dictionary = {}   # touch index (-1 = mouse) -> grab anchor {pos, az, el}
 var _enabled: bool = true
 
 ## Explicit dependency: the rig this strip steers.
@@ -76,26 +81,24 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		if st.pressed and _is_inside(st.position):
-			_owned_touches[st.index] = true
-			_drag_to(st.position)
+			_begin_drag(st.index, st.position)
 			get_viewport().set_input_as_handled()
 		elif not st.pressed and _owned_touches.erase(st.index):
 			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
 		if _owned_touches.has(sd.index):
-			_drag_to(sd.position)
+			_drag_to(sd.index, sd.position)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and _is_inside(mb.position):
-			_owned_touches[-1] = true
-			_drag_to(mb.position)
+			_begin_drag(-1, mb.position)
 			get_viewport().set_input_as_handled()
 		elif not mb.pressed and _owned_touches.erase(-1):
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _owned_touches.has(-1):
-		_drag_to((event as InputEventMouseMotion).position)
+		_drag_to(-1, (event as InputEventMouseMotion).position)
 		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
@@ -127,11 +130,22 @@ func _sag(u: float) -> float:
 func _y_for(u: float, el_t: float) -> float:
 	return lerpf(low_y, high_y, el_t) * size.y + _sag(u)
 
-func _drag_to(viewport_pos: Vector2) -> void:
+func _begin_drag(index: int, viewport_pos: Vector2) -> void:
+	_owned_touches[index] = {"pos": _to_local(viewport_pos), "az": _sun.target_azimuth, "el": _sun.target_elevation}
+	get_viewport().set_input_as_handled()
+
+func _drag_to(index: int, viewport_pos: Vector2) -> void:
+	var grab: Dictionary = _owned_touches[index]
 	var p := _to_local(viewport_pos)
-	var u := clampf(inverse_lerp(side_margin, size.x - side_margin, p.x), 0.0, 1.0)
-	var el_t := clampf(inverse_lerp(low_y * size.y, high_y * size.y, p.y - _sag(u)), 0.0, 1.0)
-	_sun.set_target(lerpf(_sun.azimuth_min, _sun.azimuth_max, u), lerpf(_sun.elevation_min, _sun.elevation_max, el_t))
+	var d: Vector2 = p - grab.pos
+	var span_x := maxf(1.0, size.x - 2.0 * side_margin)
+	var span_y := maxf(1.0, (low_y - high_y) * size.y)
+	var az: float = grab.az + d.x / span_x * (_sun.azimuth_max - _sun.azimuth_min) * drag_sensitivity
+	var el: float = grab.el - d.y / span_y * (_sun.elevation_max - _sun.elevation_min) * drag_sensitivity
+	_sun.set_target(az, el)
+	# Clamped at a limit: re-anchor so reversing direction responds immediately.
+	if not is_equal_approx(_sun.target_azimuth, az) or not is_equal_approx(_sun.target_elevation, el):
+		_owned_touches[index] = {"pos": p, "az": _sun.target_azimuth, "el": _sun.target_elevation}
 	queue_redraw()
 
 func _angles_to_local(az: float, el: float) -> Vector2:

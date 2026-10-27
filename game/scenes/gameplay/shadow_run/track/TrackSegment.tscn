@@ -7,7 +7,7 @@
 [ext_resource type="Material" path="res://game/assets/materials/ground_dirt.tres" id="5_dirt"]
 
 [sub_resource type="BoxMesh" id="Mesh_road"]
-size = Vector3(10, 0.2, 30)
+size = Vector3(8.5, 0.2, 30)
 
 [sub_resource type="BoxMesh" id="Mesh_curb"]
 size = Vector3(0.3, 0.25, 30)
@@ -39,37 +39,37 @@ mesh = SubResource("Mesh_road")
 surface_material_override/0 = ExtResource("2_road")
 
 [node name="CurbL" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.15, 0.02, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0.02, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_curb")
 surface_material_override/0 = ExtResource("3_curb")
 
 [node name="CurbR" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 0.02, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0.02, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_curb")
 surface_material_override/0 = ExtResource("3_curb")
 
 [node name="WalkL" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.05, 0, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.3, 0, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_walk")
 surface_material_override/0 = ExtResource("4_walk")
 
 [node name="WalkR" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.05, 0, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, 0, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_walk")
 surface_material_override/0 = ExtResource("4_walk")
 
 [node name="DirtL" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28.8, -0.05, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28.05, -0.05, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_dirt")
 surface_material_override/0 = ExtResource("5_dirt")
 
 [node name="DirtR" type="MeshInstance3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28.8, -0.05, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28.05, -0.05, -15)
 cast_shadow = 0
 mesh = SubResource("Mesh_dirt")
 surface_material_override/0 = ExtResource("5_dirt")

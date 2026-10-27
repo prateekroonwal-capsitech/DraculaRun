@@ -16,27 +16,27 @@ size = Vector3(1.2, 5.5, 2.5)
 size = Vector3(1.2, 5.5, 2.5)
 
 [sub_resource type="BoxMesh" id="Mesh_2"]
-size = Vector3(13.4, 1.5, 2.5)
+size = Vector3(11.9, 1.5, 2.5)
 
 [sub_resource type="BoxShape3D" id="Shape_2"]
-size = Vector3(13.4, 1.5, 2.5)
+size = Vector3(11.9, 1.5, 2.5)
 
 [sub_resource type="BoxMesh" id="Mesh_3"]
-size = Vector3(13.8, 0.4, 2.9)
+size = Vector3(12.3, 0.4, 2.9)
 
 [sub_resource type="BoxShape3D" id="Shape_3"]
-size = Vector3(13.8, 0.4, 2.9)
+size = Vector3(12.3, 0.4, 2.9)
 
 [node name="stone_arch" type="Node3D"]
 editor_description = "Stone arch spanning all lanes; deck 5.5-7.4m high, 2.5m deep. Origin: road center."
 
 [node name="Mesh0" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.1, 2.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.35, 2.75, 0)
 mesh = SubResource("Mesh_0")
 surface_material_override/0 = ExtResource("m1")
 
 [node name="Mesh1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.1, 2.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.35, 2.75, 0)
 mesh = SubResource("Mesh_1")
 surface_material_override/0 = ExtResource("m1")
 
@@ -75,11 +75,11 @@ collision_layer = 8
 collision_mask = 0
 
 [node name="Shape0" type="CollisionShape3D" parent="ShadowCaster"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.1, 2.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.35, 2.75, 0)
 shape = SubResource("Shape_0")
 
 [node name="Shape1" type="CollisionShape3D" parent="ShadowCaster"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.1, 2.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.35, 2.75, 0)
 shape = SubResource("Shape_1")
 
 [node name="Shape2" type="CollisionShape3D" parent="ShadowCaster"]

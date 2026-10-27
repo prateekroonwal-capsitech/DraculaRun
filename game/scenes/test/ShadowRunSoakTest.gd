@@ -80,6 +80,7 @@ func _run() -> void:
 					_logger.error("Soak: tree still paused after resume")
 					failures += 1
 			failures += await _check_two_touch(feature)
+			failures += await _check_lane_edges(feature)
 		await get_tree().create_timer(run_seconds).timeout
 		feature.force_death("sunlight" if i % 2 == 0 else "obstacle")
 		var panel: GameOverPanel = null
@@ -143,6 +144,30 @@ func _check_two_touch(feature: ShadowRunFeature) -> int:
 		problems += 1
 	if problems == 0:
 		_logger.info("Soak: two-touch OK (sun target az %.1f, lane %d -> %d)" % [feature.sun_rig.target_azimuth, lane_before, feature.dracula.get_lane()])
+	return problems
+
+## Edge cases: bursts of key presses past both road edges (one starts a slide, the
+## rest hit the input buffer). Dracula must end on the outermost lane, exactly on its
+## center, with no overshoot. Lane count/positions come from the scene's LaneConfig.
+func _check_lane_edges(feature: ShadowRunFeature) -> int:
+	var lanes := feature.dracula.lanes
+	var problems := 0
+	for dir in [-1, 1]:
+		for _i in lanes.lane_count + 2:
+			var e := InputEventAction.new()
+			e.action = "move_left" if dir < 0 else "move_right"
+			e.pressed = true
+			Input.parse_input_event(e)
+			await get_tree().create_timer(0.06).timeout
+		await get_tree().create_timer(0.5).timeout
+		var want := 0 if dir < 0 else lanes.lane_count - 1
+		var lane := feature.dracula.get_lane()
+		var x := feature.dracula.position.x
+		if lane != want or absf(x - lanes.lane_x(want)) > 0.01:
+			_logger.error("Soak: edge test dir %d ended in lane %d at x %.2f (want lane %d at x %.2f)" % [dir, lane, x, want, lanes.lane_x(want)])
+			problems += 1
+	if problems == 0:
+		_logger.info("Soak: lane edges OK (%d lanes, clamped at 0 and %d)" % [lanes.lane_count, lanes.lane_count - 1])
 	return problems
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:

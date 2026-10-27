@@ -5,7 +5,7 @@ extends Camera3D
 # Mirrors CameraController's API (follow / stop_follow / shake) for 3D; the
 # template's CameraController extends Camera2D so it cannot be reused directly.
 # The camera uses keep_aspect = KEEP_WIDTH (set in CameraRig.tscn): the horizontal
-# FOV is fixed, so all 4 lanes always fit and taller phones simply see further ahead.
+# FOV is fixed, so every lane (LaneConfig) always fits and taller phones simply see further ahead.
 # Ticks in _physics_process to stay in lockstep with Dracula (no follow jitter).
 # PDF §4 CPU: the physics tick is off until follow() or shake() gives it work.
 

@@ -16,16 +16,23 @@ extends Resource
 ##   * unsolvable          — no lane+sun path keeps exposure < 100 (optional obstacles ON).
 ##   * sun_irrelevant      — a lane path survives even under the WORST sun angle at every
 ##                           step, i.e. the sun can be ignored (optional obstacles OFF).
+##   * lane_always_safe    — one lane, ridden straight through, survives the worst sun
+##                           angle (the narrow 3-lane road makes this the easy failure).
+##   * all_lanes_blocked   — at some distance every lane is physically blocked
+##                           (optional obstacles ON = worst case).
 ##   * sun_optional        — every single fixed sun angle solves the segment.
 ##   * needs_sun_move      — requires_sun_move is set but some fixed angle solves it.
 ##   * bad_window          — a declared SegmentSafeWindow is not actually shaded.
 ##   * no_windows          — no safe window declared.
 ## Warnings:
 ##   * all_shaded          — some angle shades >90% of the road (sun parks there).
+##   * lane_mostly_shaded  — a lane is shaded at EVERY sun angle for > always_shaded_warn
+##                           of its length.
 
 const INF_EXPOSURE: float = 1.0e9
 
-@export var lane_x: PackedFloat32Array = PackedFloat32Array([-3.75, -1.25, 1.25, 3.75])
+## Lane layout (track/lane_config.tres) — the same resource Dracula uses.
+@export var lanes: LaneConfig
 @export var sample_heights: PackedFloat32Array = PackedFloat32Array([0.2, 1.0, 1.65])
 @export var azimuths: PackedFloat32Array = PackedFloat32Array([-70, -60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60, 70])
 @export var elevations: PackedFloat32Array = PackedFloat32Array([18.0, 28.5, 39.0, 49.5, 60.0])
@@ -40,12 +47,14 @@ const INF_EXPOSURE: float = 1.0e9
 @export var entry_exposure: float = 25.0
 @export var min_speed: float = 9.0
 @export var max_speed: float = 17.0
-@export var max_azimuth_speed: float = 90.0
-@export var max_elevation_speed: float = 60.0
+@export var max_azimuth_speed: float = 135.0
+@export var max_elevation_speed: float = 135.0
 ## Seconds Dracula must stay in a lane after switching (models human reaction time).
 @export var min_lane_dwell: float = 0.3
 ## Fraction of a safe window's samples that must be shaded.
 @export var window_tolerance: float = 0.85
+## Warn when a lane is shaded at every sun angle for more than this fraction of its length.
+@export var always_shaded_warn: float = 0.4
 
 class Grid:
 	var z_count: int
@@ -75,6 +84,7 @@ func speed_for(segment: TrackSegment) -> float:
 func sample_grid(segment: TrackSegment, space: PhysicsDirectSpaceState3D) -> Grid:
 	var g := Grid.new()
 	g.z_count = int(ceil(segment.length / z_resolution))
+	var lane_x := lanes.positions()
 	g.lanes = lane_x.size()
 	g.angles = angle_count()
 	g.frac.resize(g.z_count * g.lanes * g.angles)
@@ -118,6 +128,16 @@ func analyze(segment: TrackSegment, grid_all: Grid, grid_required: Grid) -> Dict
 	var irrelevant := _solve(grid_required, speed, -1, true)
 	if irrelevant:
 		errors.append("sun_irrelevant: a lane path survives under the worst sun angle everywhere")
+
+	for lane in grid_required.lanes:
+		if _lane_survives_worst_case(grid_required, speed, lane):
+			errors.append("lane_always_safe: lane %d is safe at every sun angle all the way through" % lane)
+		var always := _always_shaded_fraction(grid_required, lane)
+		if always > always_shaded_warn:
+			warnings.append("lane_mostly_shaded: lane %d is shaded at every sun angle for %.0f%% of the segment" % [lane, always * 100.0])
+	var blocked_at := _first_fully_blocked(grid_all)
+	if blocked_at >= 0.0:
+		errors.append("all_lanes_blocked: every lane is blocked at %.1f m" % blocked_at)
 
 	var fixed_ok := 0
 	var fixed_solutions: PackedStringArray = []
@@ -242,6 +262,39 @@ func _step_exposure(e: float, frac: float, dt: float) -> float:
 	if frac > 0.0:
 		return e + burn_rate * frac * dt
 	return maxf(0.0, e - heal_rate * dt)
+
+## Straight run down one lane under the worst sun angle at every sample.
+func _lane_survives_worst_case(g: Grid, speed: float, lane: int) -> bool:
+	var dt := (azimuths[1] - azimuths[0]) / max_azimuth_speed
+	var dz := speed * dt
+	var e := entry_exposure
+	for step in int(ceil(g.z_count * z_resolution / dz)):
+		var z := mini(int(((step + 0.5) * dz) / z_resolution), g.z_count - 1)
+		if g.is_blocked(z, lane):
+			return false
+		e = _step_exposure(e, _frac(g, z, lane, -1, true), dt)
+		if e >= 100.0:
+			return false
+	return true
+
+func _always_shaded_fraction(g: Grid, lane: int) -> float:
+	var count := 0
+	for z in g.z_count:
+		if _frac(g, z, lane, -1, true) <= 0.34:
+			count += 1
+	return float(count) / float(g.z_count)
+
+## Distance (m) of the first sample where every lane is blocked, or -1.
+func _first_fully_blocked(g: Grid) -> float:
+	for z in g.z_count:
+		var free := false
+		for lane in g.lanes:
+			if not g.is_blocked(z, lane):
+				free = true
+				break
+		if not free:
+			return (z + 0.5) * z_resolution
+	return -1.0
 
 func _window_shaded_ratio(g: Grid, w: SegmentSafeWindow) -> float:
 	var total := 0

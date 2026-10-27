@@ -25,28 +25,28 @@ safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0")])
 design_notes = "Ruins with fallen pillars and spikes. Less shade; thread the obstacles while keeping a shadow on you."
 
 [node name="ruin_wall_0" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 0, -4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.65, 0, -4)
 
 [node name="ruin_wall_1" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0, -13)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.65, 0, -13)
 
 [node name="ruin_wall_2" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 0, -22)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.65, 0, -22)
 
 [node name="tree_3" parent="Casters" instance=ExtResource("p2")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 0, -28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.75, 0, -28)
 
 [node name="pillar_4" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0, -9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.05, 0, -9)
 
 [node name="pillar_5" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.8, 0, -18)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.05, 0, -18)
 
 [node name="fallen_pillar_6" parent="Obstacles" instance=ExtResource("p3")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, -7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 0, -7)
 
 [node name="fallen_pillar_7" parent="Obstacles" instance=ExtResource("p3")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, -21)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 0, -21)
 
 [node name="spike_trap_8" parent="OptionalObstacles" instance=ExtResource("p4")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 0, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -14)

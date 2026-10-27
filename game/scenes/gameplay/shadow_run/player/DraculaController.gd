@@ -1,7 +1,7 @@
 class_name DraculaController
 extends PlayerController3D
 
-## Dracula — auto-runs along −Z, switches between 4 lanes, shows burn feedback
+## Dracula — auto-runs along −Z, switches between the lanes in LaneConfig, shows burn feedback
 ## and plays the two death animations. Run speed is driven by ShadowRunFeature;
 ## Dracula never decides on his own that he is dead — he reports obstacle hits
 ## and the feature orders the matching death animation.
@@ -16,9 +16,8 @@ signal death_finished(cause: String)
 enum RunState { IDLE, RUNNING, DYING, DEAD }
 
 @export_group("Lanes")
-## Lane centers in meters (X). Lane width 2.5 m.
-@export var lane_positions: PackedFloat32Array = PackedFloat32Array([-3.75, -1.25, 1.25, 3.75])
-@export var start_lane: int = 1
+## Lane count, width and start lane (track/lane_config.tres).
+@export var lanes: LaneConfig
 ## Seconds for one lane slide.
 @export var lane_switch_time: float = 0.12
 
@@ -102,8 +101,8 @@ func _on_ready() -> void:
 	# burn_rim.tres is a shared resource that survives scene reloads: reset it.
 	rim_material.set_shader_parameter("intensity", 0.0)
 	flare_light.light_energy = 0.0
-	_lane = clampi(start_lane, 0, lane_positions.size() - 1)
-	position.x = lane_positions[_lane]
+	_lane = lanes.clamp_lane(lanes.start_lane)
+	position.x = lanes.lane_x(_lane)
 	_to_x = position.x
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
 	set_process_unhandled_input(true)
@@ -204,12 +203,12 @@ func _move(delta: float) -> void:
 	_update_burn_pulses(delta)
 
 func _begin_switch(dir: int) -> void:
-	var target := clampi(_lane + dir, 0, lane_positions.size() - 1)
+	var target := lanes.clamp_lane(_lane + dir)
 	if target == _lane:
-		return
+		return   # swipe past the road edge: ignored, no slide, no feedback
 	_lane = target
 	_from_x = position.x
-	_to_x = lane_positions[_lane]
+	_to_x = lanes.lane_x(_lane)
 	_switch_elapsed = 0.0
 	_switching = true
 	# Registers immediately (same frame as the input); the slide is cosmetic.

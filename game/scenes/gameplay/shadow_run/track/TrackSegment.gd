@@ -1,7 +1,7 @@
 class_name TrackSegment
 extends Node3D
 
-## A pooled 30 m, 4-lane road segment. The segment origin is its start edge;
+## A pooled 30 m road segment (lanes per LaneConfig; 3 by default). The segment origin is its start edge;
 ## the road runs from local z = 0 to z = -length (the run direction is −Z).
 ##
 ## Authoring rules (enforced by SegmentValidator):

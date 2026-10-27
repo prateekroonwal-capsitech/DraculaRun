@@ -7,7 +7,7 @@
 
 [sub_resource type="Resource" id="Win_0"]
 script = ExtResource("2_win")
-lane = 1
+lane = 0
 start_m = 0.5
 end_m = 3.5
 azimuth_min = -70
@@ -22,16 +22,16 @@ safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0")])
 design_notes = "Three tall, thin watch towers. Their shadows are narrow strips; you need a low sun at exactly the right angle."
 
 [node name="watch_tower_0" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.25, 0, -4)
 
 [node name="watch_tower_1" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.25, 0, -15)
 
 [node name="watch_tower_2" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -26)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.25, 0, -26)
 
 [node name="tree_3" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 0, -9.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.75, 0, -9.5)
 
 [node name="tree_4" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 0, -20.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.75, 0, -20.5)

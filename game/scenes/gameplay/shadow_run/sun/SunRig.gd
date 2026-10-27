@@ -19,11 +19,16 @@ signal sun_moved(azimuth_deg: float, elevation_deg: float)
 @export var elevation_max: float = 60.0
 
 @export_group("Motion")
-## Hard cap on angular speed, degrees per second.
-@export var max_azimuth_speed: float = 90.0
-@export var max_elevation_speed: float = 60.0
-## Exponential smoothing toward the target (1/s). Higher = snappier.
-@export var smoothing: float = 9.0
+## Hard cap on angular speed, degrees per second. Keep SegmentValidator's
+## max_azimuth_speed / max_elevation_speed (segment_validator.tres) in sync.
+@export var max_azimuth_speed: float = 135.0
+@export var max_elevation_speed: float = 135.0
+## Exponential smoothing toward the target (1/s). Higher = snappier (lag ≈ 1/smoothing s).
+@export var smoothing: float = 13.0
+## Minimum catch-up speed (°/s) so the exponential tail never crawls after the finger stops.
+@export var min_follow_speed: float = 40.0
+## Within this many degrees of the target the sun snaps onto it and stops ticking.
+@export var settle_threshold: float = 0.25
 
 @export_group("Start")
 @export var start_azimuth: float = 35.0
@@ -85,15 +90,19 @@ func is_settled() -> bool:
 
 func _physics_process(delta: float) -> void:
 	var blend := 1.0 - exp(-smoothing * delta)
-	var step_az := clampf((target_azimuth - azimuth) * blend, -max_azimuth_speed * delta, max_azimuth_speed * delta)
-	var step_el := clampf((target_elevation - elevation) * blend, -max_elevation_speed * delta, max_elevation_speed * delta)
-	azimuth += step_az
-	elevation += step_el
-	if absf(target_azimuth - azimuth) < 0.05 and absf(target_elevation - elevation) < 0.05:
+	azimuth += _follow_step(target_azimuth - azimuth, blend, max_azimuth_speed, delta)
+	elevation += _follow_step(target_elevation - elevation, blend, max_elevation_speed, delta)
+	if absf(target_azimuth - azimuth) < settle_threshold and absf(target_elevation - elevation) < settle_threshold:
 		azimuth = target_azimuth
 		elevation = target_elevation
 		set_physics_process(false)   # PDF §4: at rest — stop ticking
 	_apply()
+
+## Smoothed step toward the target: exponential ease, never slower than
+## min_follow_speed (no lingering tail), never faster than max_speed, never overshooting.
+func _follow_step(diff: float, blend: float, max_speed: float, delta: float) -> float:
+	var mag := clampf(maxf(absf(diff) * blend, min_follow_speed * delta), 0.0, minf(absf(diff), max_speed * delta))
+	return signf(diff) * mag
 
 func _apply() -> void:
 	if light:

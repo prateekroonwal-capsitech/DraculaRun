@@ -5,7 +5,8 @@ extends Resource
 ## into the segment is shaded while the sun is inside this angle box".
 ## SegmentValidator checks every declared window against real physics rays.
 
-@export_range(0, 3) var lane: int = 0
+## Lane index (0 = leftmost, up to LaneConfig.lane_count - 1).
+@export_range(0, 6) var lane: int = 0
 @export var start_m: float = 0.0
 @export var end_m: float = 30.0
 @export_range(-70.0, 70.0) var azimuth_min: float = -70.0

@@ -1,6 +1,10 @@
 [gd_resource type="Resource" script_class="SegmentValidator" format=3]
 
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentValidator.gd" id="1_val"]
+[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/lane_config.tres" id="2_lanes"]
 
 [resource]
 script = ExtResource("1_val")
+lanes = ExtResource("2_lanes")
+max_azimuth_speed = 135.0
+max_elevation_speed = 135.0

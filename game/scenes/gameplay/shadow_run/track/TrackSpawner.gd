@@ -8,8 +8,16 @@ extends Node3D
 ## segment is pulled to the front.
 ## PDF §4 CPU: pooled segments are hidden + PROCESS_MODE_DISABLED (no ticking, no physics).
 ## PDF §6: free lists per segment id → O(1) checkout/return.
+## "Never block every lane": segments never overlap in Z, so a lane can only be fully
+## blocked inside one segment. SegmentValidator rejects any segment where all lanes are
+## blocked at the same distance with ALL optional obstacles on (the worst roll), so no
+## density roll here can ever close the road.
 
 @export var segment_scenes: Array[PackedScene] = []
+## Lane layout (track/lane_config.tres); pushed into the road material's dividers.
+@export var lanes: LaneConfig
+## road_cobbles.tres, shared by every segment's road mesh.
+@export var road_material: ShaderMaterial
 @export var copies_per_scene: int = 2
 @export var active_count: int = 7
 ## Meters behind Dracula before a passed segment is recycled (camera sits ~8 m behind).
@@ -44,6 +52,9 @@ func prewarm() -> void:
 	if _prewarmed:
 		return
 	_prewarmed = true
+	if lanes and road_material:
+		road_material.set_shader_parameter("lane_count", lanes.lane_count)
+		road_material.set_shader_parameter("lane_width", lanes.lane_width)
 	for packed in segment_scenes:
 		for i in copies_per_scene:
 			var seg := packed.instantiate() as TrackSegment

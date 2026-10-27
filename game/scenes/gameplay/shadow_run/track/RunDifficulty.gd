@@ -21,7 +21,7 @@ extends Resource
 @export var obstacle_density_curve: Curve
 ## Desired azimuth change (0..1 → 0..max_sun_delta degrees) between consecutive segments.
 @export var sun_delta_curve: Curve
-@export var max_sun_delta: float = 110.0
+@export var max_sun_delta: float = 140.0
 
 @export_group("Onboarding")
 ## Gentle stretch at the start: only these segments, in this order.

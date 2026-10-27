@@ -16,7 +16,7 @@ elevation_max = 40
 
 [sub_resource type="Resource" id="Win_1"]
 script = ExtResource("2_win")
-lane = 3
+lane = 2
 start_m = 15
 end_m = 29
 azimuth_min = 30
@@ -31,7 +31,7 @@ safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0"), SubResource("W
 design_notes = "Left castle wall then right castle wall, overlapping by 6 m. Swing the sun from left to right while crossing lanes."
 
 [node name="castle_wall_long_0" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.2, 0, -9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.45, 0, -9)
 
 [node name="castle_wall_long_1" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0, -22)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.45, 0, -22)

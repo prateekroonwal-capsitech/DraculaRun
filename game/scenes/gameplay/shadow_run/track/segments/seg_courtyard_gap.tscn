@@ -17,7 +17,7 @@ elevation_max = 50
 
 [sub_resource type="Resource" id="Win_1"]
 script = ExtResource("2_win")
-lane = 2
+lane = 1
 start_m = 14
 end_m = 23
 azimuth_min = 40
@@ -32,7 +32,7 @@ safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0"), SubResource("W
 design_notes = "Sunlit courtyard gap. Cross fast, or drop the sun low on the right so the keep's long shadow reaches back over the gap."
 
 [node name="building_facade_0" parent="Casters" instance=ExtResource("p0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, -5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.25, 0, -5)
 
 [node name="castle_tower_1" parent="Casters" instance=ExtResource("p1")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -26)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.25, 0, -26)

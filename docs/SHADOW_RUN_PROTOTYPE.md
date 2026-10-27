@@ -1,7 +1,7 @@
 # Shadow Run — Prototype
 
 A 2.5D gothic endless runner built on the Godot Game Template. Dracula runs forward
-automatically down a 4-lane road. He survives only in shade, and the player controls
+automatically down a 3-lane road. He survives only in shade, and the player controls
 where the shade falls by moving the sun. Build stage: `PROTOTYPE` (local only: no
 network, ads or analytics).
 
@@ -49,7 +49,7 @@ the same `inject_services()` pass that `SceneManager` would. The fallback:
 | Action | Touch | Desktop |
 |---|---|---|
 | Change lane | Swipe left/right in the **play view** (≥ ~60 px at 1080 width). A long drag can switch two lanes. | A/D or ←/→ |
-| Sun azimuth (left ↔ right) | Drag horizontally in the **bottom sun strip** | Q / E (or mouse drag in the strip) |
+| Sun azimuth (left ↔ right) | Drag horizontally in the **bottom sun strip** (relative drag, 1.3× sensitivity: touching never jumps the sun) | Q / E (or mouse drag in the strip) |
 | Sun elevation (high ↔ low) | Drag vertically in the strip | R / F |
 | Pause | ‖ button (top-left) | Esc or P |
 | Debug overlay | Faint "dbg" button (bottom-left of the play view) | F3 |
@@ -76,11 +76,44 @@ Screen from top to bottom (`VBoxContainer` stretch ratios in `ShadowRunHUD.tscn`
 2. **Play view, 68%:** the 3D road. Only transient labels appear here (countdown, hints, the faint debug button).
 3. **Sun strip, 22%:** a wide, shallow arc. The sun icon is about 150 px across.
 
-**Camera** (`camera/CameraRig.tscn`): `keep_aspect = Keep Width`, so `fov` (60°) is the
-horizontal angle and all 4 lanes always fit; taller screens simply see further ahead.
-Defaults are height 11 m, distance 9 m and pitch 38°, which puts Dracula at about 59% of
-screen height (the lower third of the play view). Rendered captures confirmed full lanes,
-Dracula and the shade ahead at 9:16 (540×960), 9:20 (432×960) and 3:4 (720×960).
+**Camera** (`camera/CameraRig.tscn`): `keep_aspect = Keep Width`, so `fov` (50°) is the
+horizontal angle and all 3 lanes plus the roadside shadows fill the width; taller screens
+simply see further ahead. Defaults are height 11 m, distance 9 m and pitch 38°, which puts
+Dracula at about 63% of screen height (the lower third of the play view). Rendered
+captures confirmed all 3 lanes, Dracula and the shade ahead at 9:16 (540×960),
+9:20 (432×960) and 3:4 (720×960).
+
+## Lane configuration
+
+`track/lane_config.tres` (`LaneConfig`) is the single source of truth for the lanes:
+
+| Field | Value |
+|---|---|
+| `lane_count` | 3 (indexes 0, 1, 2) |
+| `lane_width` | 2.5 m, so lane centers are x = −2.5, 0, +2.5 |
+| `start_lane` | 1 (middle) |
+
+Lane x is computed as `(i − (lane_count − 1) / 2) × lane_width`. These read it:
+
+- `Dracula.tscn` (`lanes`): lane positions, start lane and edge clamping. A swipe or key
+  past the road edge is ignored: no slide, no sound, no haptic. One extra move is still
+  buffered during a slide.
+- `TrackSpawner` (`lanes`, `road_material`): pushes `lane_count` and `lane_width` into the
+  road shader's dashed dividers at prewarm.
+- `segment_validator.tres` (`lanes`): which lanes are sampled.
+- `ShadowDebugOverlay` (`lanes`): lane-center marker lines; Dracula's lane is yellow.
+
+No script contains lane positions or a lane count. The **road mesh and the lane-spanning
+props are authored geometry**, so changing the lane count also means re-authoring them.
+Current 3-lane geometry:
+
+- Road 8.5 m wide (edge ±4.25); curbs at ±4.4; sidewalks 4.55–8.05.
+- Roadside props sit at |x| ≥ 4.75: facades ±6.25, castle walls ±5.45, towers ±7.25,
+  trees ±6.75, ruin walls ±5.65, pillars ±5.05.
+- Stone arch: piers ±5.35, deck 11.9 m.
+- Banner gantry: posts ±5.25, beam 10.9 m.
+- Arcade canopy: posts ±5.25; the roof is 4.4 m wide over the middle lane only.
+- Gatehouse: towers ±7.75, deck 11.5 m.
 
 **Overhead casters fade.** The gate roof, arch decks, canopies, gantry beams and banners sit
 between the high camera and Dracula. Each of these parts is two meshes:
@@ -102,7 +135,7 @@ All gameplay paths are under `game/scenes/gameplay/shadow_run/`.
 | `player/DeathFX.tscn` | One-shot ash and bat bursts |
 | `sun/SunRig.tscn` | DirectionalLight3D and sun angle state |
 | `camera/CameraRig.tscn` | Portrait chase camera (all framing values exported) |
-| `track/TrackSegment.tscn` | Base road segment (30 m, 4 lanes, `Casters` / `Obstacles` / `OptionalObstacles`) |
+| `track/TrackSegment.tscn` | Base road segment (30 m, 3 lanes, `Casters` / `Obstacles` / `OptionalObstacles`) |
 | `track/segments/seg_*.tscn` | 10 authored segments, inherited from `TrackSegment.tscn` |
 | `props/casters/*.tscn` | building_facade, building_facade_short, castle_wall, castle_wall_long, castle_tower, watch_tower, pillar, tree, stone_arch, arcade_vault, banner_gantry, hanging_banner, covered_wagon (dual-purpose), ruin_wall, gatehouse |
 | `props/obstacles/*.tscn` | crate, spike_trap, fallen_pillar |
@@ -136,7 +169,7 @@ ray lines.
 | `ShadowRunFeature.gd` (GameFeature) | Run lifecycle: injection → prewarm → countdown → `GameManager.start()` → per-frame loop → death → save → Game Over / Retry / Home; pause; GameBus relays |
 | `player/DraculaController.gd` (extends `PlayerController3D`) | Auto-run, lanes and input buffer, swipe detection, burn feedback, both death animations |
 | `game/scripts/controllers/PlayerController3D.gd` | 3D twin of the template's 2D `PlayerController`, with the same injection contract |
-| `sun/SunRig.gd` | Azimuth/elevation clamps, speed-capped smoothing (90°/s), light orientation, sky/ambient tint |
+| `sun/SunRig.gd` | Azimuth/elevation clamps, speed-capped smoothing (135°/s), no-tail settle, light orientation, sky/ambient tint |
 | `shadow/ShadowSensor.gd` | Gameplay shade truth (raycasts) and the exposure meter |
 | `track/TrackSegment.gd`, `SegmentSafeWindow.gd` | Segment metadata and pooling helpers |
 | `track/TrackSpawner.gd` | Prewarmed pool, recycling, difficulty-driven selection |
@@ -196,8 +229,9 @@ all three should be green.
 ## Authoring a new segment in the editor
 
 1. **Scene → New Inherited Scene…** from `track/TrackSegment.tscn`. The road runs from
-   z = 0 to z = −30 (run direction −Z). Lane centers are x = −3.75, −1.25, 1.25, 3.75.
-   Roadside props go at |x| ≥ 5.5.
+   z = 0 to z = −30 (run direction −Z). Lane centers are x = −2.5, 0, +2.5 (lanes 0, 1, 2).
+   Roadside props go at |x| ≥ 4.75. A fallen pillar spans two lanes when centered at
+   x = ±1.25.
 2. Drag caster scenes from `props/casters/` under **Casters**. Drag obstacles under
    **Obstacles** (always present) or **OptionalObstacles** (enabled by density).
    Move them with the gizmo.
@@ -212,7 +246,14 @@ all three should be green.
    - is **sun_irrelevant**: a path survives the worst sun angle everywhere;
    - is **sun_optional**: every fixed sun angle solves it;
    - has `requires_sun_move` set while a fixed angle solves it;
-   - declares a safe window that isn't really shaded.
+   - declares a safe window that isn't really shaded;
+   - is **lane_always_safe**: one lane, ridden straight through, survives the worst sun
+     angle. With only 3 lanes this is the easiest way for the sun to become irrelevant;
+   - is **all_lanes_blocked**: every lane is physically blocked at the same distance, with
+     all optional obstacles on. This is what guarantees the spawner can never close the road.
+
+   It also **warns** (`lane_mostly_shaded`) when a lane is shaded at every sun angle for
+   more than 40% of its length.
 
    Use `--verbose=<id>` shade maps to place safe windows.
 
@@ -225,14 +266,15 @@ pattern: a visual mesh with `cast_shadow = Off` and `visibility_range_begin = 16
 
 | Where | What |
 |---|---|
+| `lane_config.tres` | `lane_count` (3), `lane_width` (2.5 m), `start_lane` (1) |
 | `run_difficulty.tres` | `speed_min` 9 / `speed_max` 17 m/s and `speed_curve` over `ramp_duration_s` (360 s); `max_difficulty_curve`, `difficulty_window`; `obstacle_density_curve`; `sun_delta_curve`; onboarding duration (30 s) and sequence |
 | `ShadowSensor` (in `ShadowRun.tscn`) | `burn_rate`, `heal_rate`, `ray_length`, `emit_step` |
-| `SunRig` | Azimuth −70…70, elevation 18…60, max speeds 90/60 °/s, smoothing, start angles (−45°/36° so onboarding starts in shade), colors |
+| `SunRig` (select **SunRig** in `ShadowRun.tscn`, or open `sun/SunRig.tscn`; Motion group) | Azimuth −70…70, elevation 18…60, `max_azimuth_speed` / `max_elevation_speed` 135 °/s, `smoothing` 13 /s (≈ 0.08 s lag), `min_follow_speed` 40 °/s, `settle_threshold` 0.25°, start angles (−45°/36° so onboarding starts in shade), colors |
 | `Dracula` | Lane positions, slide time, swipe threshold (fraction of width), burn and death animation timings, bob/lean |
 | `CameraRig` | `height`, `distance`, `pitch_degrees`, `fov`, `lateral_follow`, death cam |
-| `SunControl` | `sun_radius` (≥ 70), arc sag, high/low rows, key speeds |
+| `SunControl` (select **HUDLayer/ShadowRunHUD/…/SunControl**, or open `ui/mfw/SunControl.tscn`) | `drag_sensitivity` 1.3, `key_azimuth_speed` / `key_elevation_speed` 135 °/s, `sun_radius` (≥ 70), arc sag, high/low rows |
 | `ShadowRunFeature` | Countdown, onboarding `hint_times` / `hint_texts`, F6 fallback |
-| `segment_validator.tres` | Sample grid, entry exposure (25), lane dwell (0.3 s), window tolerance |
+| `segment_validator.tres` | Sample grid, entry exposure (25), lane dwell (0.3 s), window tolerance, `max_azimuth_speed` / `max_elevation_speed` (keep equal to SunRig: 135 °/s) |
 
 ## Mobile renderer and shadow settings
 
@@ -250,9 +292,28 @@ device in this session. Profile on hardware before tuning further.
 ## Verification done
 
 - **ShadowSensorSelfCheck:** 11/11 pass (lit/shaded at known angles, obstacle layer never shades, burn-out in ~1.2 s, recovery).
-- **SegmentValidator:** all 10 segments pass. Fixed-angle solutions range from 14/75 to 41/75, so every segment needs the sun in a particular region.
-- **Soak test (windowed):** 10 Retries with flat node count (1822 each time), one `GameBus` connection, 10 saved runs, pause/resume, and two-touch arbitration (sun strip drag + play-view swipe = sun moved and exactly one lane change).
+- **SegmentValidator (3 lanes):** all 10 segments pass. Fixed-angle solutions range from 9/75 to 34/75, so every segment needs the sun in a particular region. No lane is safe at every angle, and no distance has every lane blocked. A negative test (burn disabled) confirms `lane_always_safe` fires.
+- **Soak test (windowed):** 10 Retries with flat node count (1806 each time), one `GameBus` connection, 10 saved runs and pause/resume. It also covers two-touch arbitration (sun strip drag + play-view swipe = sun moved and exactly one lane change) and lane edges (bursts of presses past both edges end exactly on lanes 0 and 2).
 - **Rendered captures** at 9:16, 9:20 and 3:4 (framing, HUD inside bounds, shade contrast).
+
+## 3-lane re-authoring notes
+
+The switch from 4 to 3 lanes kept every segment's purpose:
+
+| Segment | What changed |
+|---|---|
+| `seg_gate_start` | Safe window is now lane 0 only |
+| `seg_left_row` / `seg_right_row` | Lane 0 / lane 2 (was lane 3) |
+| `seg_sun_swing` | Lane 0, then lane 2 |
+| `seg_arcade` | Canopy narrowed to cover only the middle lane (shade puzzle in lane 1); optional crates moved to the outer lanes |
+| `seg_banners` | Gantries hang banners over lanes {0, 2}, then {1}, then {0, 2}; the optional spike trap is in lane 2 |
+| `seg_wagon` | Wagons in the outer lanes (0, then 2) throw shade into the middle lane with the sun left, then right. This is still the wagon decision |
+| `seg_courtyard_gap` | Keep shadow window moved to lane 1 |
+| `seg_ruins_slalom` | Fallen pillars span lanes 0–1, then 1–2, so one lane always stays open |
+| `seg_towers_narrow` | Unchanged except for roadside x |
+
+Every roadside prop moved 0.75 m inward to the narrower road. Obstacle density in
+`run_difficulty.tres` was lowered (peak 0.6, was 0.9; 0.12 at 15% of the ramp, was 0.2).
 
 ## Known issues / limits
 

@@ -3,8 +3,14 @@
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/sun/SunRig.gd" id="1_sun"]
 
 [node name="SunRig" type="Node3D" node_paths=PackedStringArray("light")]
+editor_description = "Sun feel lives here (Motion group): max_azimuth_speed / max_elevation_speed, smoothing, min_follow_speed, settle_threshold."
 script = ExtResource("1_sun")
 light = NodePath("Sun")
+max_azimuth_speed = 135.0
+max_elevation_speed = 135.0
+smoothing = 13.0
+min_follow_speed = 40.0
+settle_threshold = 0.25
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 light_color = Color(1, 0.8, 0.45, 1)

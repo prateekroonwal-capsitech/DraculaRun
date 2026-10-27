@@ -9,6 +9,8 @@
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/debug/ShadowDebugOverlay.tscn" id="7_debug"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/ShadowRunHUD.tscn" id="8_hud"]
 [ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/run_difficulty.tres" id="9_diff"]
+[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/lane_config.tres" id="14_lanes"]
+[ext_resource type="Material" path="res://game/assets/materials/road_cobbles.tres" id="15_road"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/GameOverPanel.tscn" id="10_gameover"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/PausePanel.tscn" id="11_pause"]
 [ext_resource type="AudioStream" path="res://game/assets/audio/sfx/countdown_blip.wav" id="12_blip"]
@@ -70,7 +72,7 @@ game_over_panel = ExtResource("10_gameover")
 pause_panel = ExtResource("11_pause")
 countdown_sfx = ExtResource("12_blip")
 hint_times = PackedFloat32Array(0.3, 3, 6.5, 13)
-hint_texts = PackedStringArray("Swipe the road (or A/D) to change lanes", "Sun on the left = shade on the left lanes. Stay in it!", "Buildings switch sides: drag the sun RIGHT in the strip below (E)", "Swing the sun as the walls change sides")
+hint_texts = PackedStringArray("Swipe the road (or A/D) to change lanes", "Sun on the left = shade on the left. Stay in it!", "Buildings switch sides: drag the sun RIGHT in the strip below (E)", "Swing the sun as the walls change sides")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_1")
@@ -82,6 +84,8 @@ start_elevation = 36.0
 
 [node name="TrackSpawner" type="Node3D" parent="."]
 script = ExtResource("4_spawner")
+lanes = ExtResource("14_lanes")
+road_material = ExtResource("15_road")
 active_count = 7
 segment_scenes = Array[PackedScene]([ExtResource("s0"), ExtResource("s1"), ExtResource("s2"), ExtResource("s3"), ExtResource("s4"), ExtResource("s5"), ExtResource("s6"), ExtResource("s7"), ExtResource("s8"), ExtResource("s9")])
 
@@ -97,6 +101,7 @@ script = ExtResource("5_sensor")
 follow_target = NodePath("../Dracula")
 
 [node name="DebugOverlay" parent="." instance=ExtResource("7_debug")]
+lanes = ExtResource("14_lanes")
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]
 layer = -1

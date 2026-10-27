@@ -11,7 +11,7 @@ _data = [Vector2(0, 0.05), 0.0, 0.0, 0, 0, Vector2(0.1, 0.25), 1.5, 1.5, 0, 0, V
 point_count = 4
 
 [sub_resource type="Curve" id="Curve_obstacles"]
-_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.15, 0.2), 1.2, 1.2, 0, 0, Vector2(1, 0.9), 0.4, 0.0, 0, 0]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.15, 0.12), 0.7, 0.7, 0, 0, Vector2(1, 0.6), 0.35, 0.0, 0, 0]
 point_count = 3
 
 [sub_resource type="Curve" id="Curve_sundelta"]
@@ -24,3 +24,4 @@ speed_curve = SubResource("Curve_speed")
 max_difficulty_curve = SubResource("Curve_maxdiff")
 obstacle_density_curve = SubResource("Curve_obstacles")
 sun_delta_curve = SubResource("Curve_sundelta")
+max_sun_delta = 140.0
