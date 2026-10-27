@@ -1,0 +1,6 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://game/assets/shaders/road_cobbles.gdshader" id="1_road"]
+
+[resource]
+shader = ExtResource("1_road")

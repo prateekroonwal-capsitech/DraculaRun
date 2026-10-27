@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/ui/mfw/SunControl.gd" id="1_sun"]
+
+[node name="SunControl" type="Control"]
+editor_description = "Bottom sun strip (~22% of the screen). Horizontal drag = azimuth, vertical drag = elevation. Touches that start here never reach lane swiping."
+custom_minimum_size = Vector2(0, 300)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_sun")

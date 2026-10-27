@@ -1,0 +1,46 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/TrackSegment.tscn" id="1_base"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentSafeWindow.gd" id="2_win"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/building_facade.tscn" id="p0"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/gatehouse.tscn" id="p1"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/ruin_wall.tscn" id="p2"]
+
+[sub_resource type="Resource" id="Win_0"]
+script = ExtResource("2_win")
+lane = 0
+start_m = 12
+end_m = 30
+azimuth_min = -70
+azimuth_max = -30
+elevation_min = 18
+elevation_max = 50
+
+[sub_resource type="Resource" id="Win_1"]
+script = ExtResource("2_win")
+lane = 1
+start_m = 12
+end_m = 30
+azimuth_min = -70
+azimuth_max = -40
+elevation_min = 18
+elevation_max = 39
+
+[node name="seg_gate_start" instance=ExtResource("1_base")]
+segment_id = &"seg_gate_start"
+difficulty = 0
+onboarding = true
+safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0"), SubResource("Win_1")])
+design_notes = "Run start. Gatehouse tunnel shades everything during the countdown, then a tall left-hand row needs the sun dragged LEFT (start sun is on the right)."
+
+[node name="gatehouse_0" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5)
+
+[node name="building_facade_1" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, -16)
+
+[node name="building_facade_2" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, -26.5)
+
+[node name="ruin_wall_3" parent="Casters" instance=ExtResource("p2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.6, 0, -20)

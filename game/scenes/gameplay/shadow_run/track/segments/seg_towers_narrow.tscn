@@ -1,0 +1,37 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/TrackSegment.tscn" id="1_base"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentSafeWindow.gd" id="2_win"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/tree.tscn" id="p0"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/watch_tower.tscn" id="p1"]
+
+[sub_resource type="Resource" id="Win_0"]
+script = ExtResource("2_win")
+lane = 1
+start_m = 0.5
+end_m = 3.5
+azimuth_min = -70
+azimuth_max = -70
+elevation_min = 18
+elevation_max = 39
+
+[node name="seg_towers_narrow" instance=ExtResource("1_base")]
+segment_id = &"seg_towers_narrow"
+difficulty = 0.85
+safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0")])
+design_notes = "Three tall, thin watch towers. Their shadows are narrow strips; you need a low sun at exactly the right angle."
+
+[node name="watch_tower_0" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -4)
+
+[node name="watch_tower_1" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -15)
+
+[node name="watch_tower_2" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -26)
+
+[node name="tree_3" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 0, -9.5)
+
+[node name="tree_4" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 0, -20.5)

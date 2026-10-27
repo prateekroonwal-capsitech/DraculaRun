@@ -1,0 +1,50 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/TrackSegment.tscn" id="1_base"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentSafeWindow.gd" id="2_win"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/arcade_vault.tscn" id="p0"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/obstacles/crate.tscn" id="p1"]
+
+[sub_resource type="Resource" id="Win_0"]
+script = ExtResource("2_win")
+lane = 1
+start_m = 7.5
+end_m = 11
+azimuth_min = -10
+azimuth_max = 10
+elevation_min = 39
+elevation_max = 39
+
+[sub_resource type="Resource" id="Win_1"]
+script = ExtResource("2_win")
+lane = 2
+start_m = 7.5
+end_m = 11
+azimuth_min = -10
+azimuth_max = 10
+elevation_min = 39
+elevation_max = 39
+
+[node name="seg_arcade" instance=ExtResource("1_base")]
+segment_id = &"seg_arcade"
+difficulty = 0.3
+safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0"), SubResource("Win_1")])
+design_notes = "Hanging canopies over the two middle lanes. A mid/high sun near straight ahead keeps their shade on the road; a low or side sun throws it off the road or far behind you."
+
+[node name="arcade_vault_0" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3)
+
+[node name="arcade_vault_1" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10.5)
+
+[node name="arcade_vault_2" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
+
+[node name="arcade_vault_3" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -25.5)
+
+[node name="crate_4" parent="OptionalObstacles" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 0, -9)
+
+[node name="crate_5" parent="OptionalObstacles" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 0, -21)

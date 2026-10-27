@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="SegmentValidator" format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentValidator.gd" id="1_val"]
+
+[resource]
+script = ExtResource("1_val")

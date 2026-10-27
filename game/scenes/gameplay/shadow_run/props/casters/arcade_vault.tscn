@@ -1,0 +1,92 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/roof_slate.tres" id="m0"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_trim.tres" id="m1"]
+[ext_resource type="Material" path="res://game/assets/materials/timber.tres" id="m2"]
+
+[sub_resource type="BoxMesh" id="Mesh_0"]
+size = Vector3(0.6, 8.1, 0.6)
+
+[sub_resource type="BoxShape3D" id="Shape_0"]
+size = Vector3(0.6, 8.1, 0.6)
+
+[sub_resource type="BoxMesh" id="Mesh_1"]
+size = Vector3(0.6, 8.1, 0.6)
+
+[sub_resource type="BoxShape3D" id="Shape_1"]
+size = Vector3(0.6, 8.1, 0.6)
+
+[sub_resource type="BoxMesh" id="Mesh_2"]
+size = Vector3(12.6, 0.3, 0.3)
+
+[sub_resource type="BoxShape3D" id="Shape_2"]
+size = Vector3(12.6, 0.3, 0.3)
+
+[sub_resource type="BoxMesh" id="Mesh_3"]
+size = Vector3(6.4, 1, 5)
+
+[sub_resource type="BoxShape3D" id="Shape_3"]
+size = Vector3(6.4, 1, 5)
+
+[node name="arcade_vault" type="Node3D"]
+editor_description = "Hanging timber canopy over the two middle lanes; roof 7.5-8.5m high, 6.4m wide, 5m deep. Origin: road center."
+
+[node name="Mesh0" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 4.05, 2.2)
+mesh = SubResource("Mesh_0")
+surface_material_override/0 = ExtResource("m1")
+
+[node name="Mesh1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 4.05, 2.2)
+mesh = SubResource("Mesh_1")
+surface_material_override/0 = ExtResource("m1")
+
+[node name="Mesh2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.95, 2.2)
+cast_shadow = 0
+visibility_range_begin = 16
+visibility_range_begin_margin = 4.0
+visibility_range_fade_mode = 1
+mesh = SubResource("Mesh_2")
+surface_material_override/0 = ExtResource("m2")
+
+[node name="Mesh2Shadow" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.95, 2.2)
+cast_shadow = 3
+mesh = SubResource("Mesh_2")
+surface_material_override/0 = ExtResource("m2")
+
+[node name="Mesh3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+cast_shadow = 0
+visibility_range_begin = 16
+visibility_range_begin_margin = 4.0
+visibility_range_fade_mode = 1
+mesh = SubResource("Mesh_3")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh3Shadow" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+cast_shadow = 3
+mesh = SubResource("Mesh_3")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="ShadowCaster" type="StaticBody3D" parent="."]
+collision_layer = 8
+collision_mask = 0
+
+[node name="Shape0" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 4.05, 2.2)
+shape = SubResource("Shape_0")
+
+[node name="Shape1" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 4.05, 2.2)
+shape = SubResource("Shape_1")
+
+[node name="Shape2" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.95, 2.2)
+shape = SubResource("Shape_2")
+
+[node name="Shape3" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+shape = SubResource("Shape_3")

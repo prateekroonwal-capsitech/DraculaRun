@@ -1,0 +1,48 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/track/TrackSegment.tscn" id="1_base"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentSafeWindow.gd" id="2_win"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/building_facade_short.tscn" id="p0"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/casters/covered_wagon.tscn" id="p1"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/obstacles/crate.tscn" id="p2"]
+
+[sub_resource type="Resource" id="Win_0"]
+script = ExtResource("2_win")
+lane = 2
+start_m = 8.5
+end_m = 11.5
+azimuth_min = -70
+azimuth_max = -60
+elevation_min = 18
+elevation_max = 28.5
+
+[sub_resource type="Resource" id="Win_1"]
+script = ExtResource("2_win")
+lane = 1
+start_m = 19.5
+end_m = 23.5
+azimuth_min = 60
+azimuth_max = 70
+elevation_min = 18
+elevation_max = 28.5
+
+[node name="seg_wagon" instance=ExtResource("1_base")]
+segment_id = &"seg_wagon"
+difficulty = 0.4
+safe_windows = Array[ExtResource("2_win")]([SubResource("Win_0"), SubResource("Win_1")])
+design_notes = "Covered wagons block their lane but throw shade into the next lane. Sun left for the first wagon, right for the second."
+
+[node name="building_facade_short_0" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, -3)
+
+[node name="covered_wagon_1" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 0, -10.5)
+
+[node name="building_facade_short_2" parent="Casters" instance=ExtResource("p0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0, -17.5)
+
+[node name="covered_wagon_3" parent="Casters" instance=ExtResource("p1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 0, -23)
+
+[node name="crate_4" parent="OptionalObstacles" instance=ExtResource("p2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.75, 0, -14)

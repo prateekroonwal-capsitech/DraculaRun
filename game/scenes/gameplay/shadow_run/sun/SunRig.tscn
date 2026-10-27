@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/sun/SunRig.gd" id="1_sun"]
+
+[node name="SunRig" type="Node3D" node_paths=PackedStringArray("light")]
+script = ExtResource("1_sun")
+light = NodePath("Sun")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+light_color = Color(1, 0.8, 0.45, 1)
+light_energy = 1.6
+shadow_enabled = true
+shadow_bias = 0.04
+shadow_normal_bias = 1.2
+directional_shadow_mode = 1
+directional_shadow_split_1 = 0.25
+directional_shadow_blend_splits = false
+directional_shadow_fade_start = 0.9
+directional_shadow_max_distance = 100.0
+directional_shadow_pancake_size = 30.0

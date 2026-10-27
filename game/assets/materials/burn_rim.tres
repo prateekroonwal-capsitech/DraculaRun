@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://game/assets/shaders/burn_rim.gdshader" id="1_rim"]
+
+[resource]
+render_priority = 1
+shader = ExtResource("1_rim")
+shader_parameter/rim_color = Color(1, 0.42, 0.06, 1)
+shader_parameter/intensity = 0.0
+shader_parameter/rim_power = 2.2

@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/camera/RunCameraController.gd" id="1_cam"]
+
+[node name="CameraRig" type="Camera3D"]
+editor_description = "Portrait chase camera. keep_aspect = Keep Width: fov is the HORIZONTAL angle, so all 4 lanes always fit; taller screens see further ahead. Tune height / distance / pitch_degrees / fov in the inspector."
+transform = Transform3D(1, 0, 0, 0, 0.788, 0.616, 0, -0.616, 0.788, 0, 11, 9)
+keep_aspect = 0
+current = true
+fov = 60.0
+far = 260.0
+script = ExtResource("1_cam")

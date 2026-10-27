@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/SegmentValidatorRunner.gd" id="1_run"]
+[ext_resource type="Resource" path="res://game/scenes/gameplay/shadow_run/track/segment_validator.tres" id="2_cfg"]
+[ext_resource type="Script" path="res://game/autoloads/Logger.gd" id="3_log"]
+
+[node name="SegmentValidatorRunner" type="Node3D" node_paths=PackedStringArray("logger")]
+script = ExtResource("1_run")
+validator = ExtResource("2_cfg")
+logger = NodePath("Logger")
+
+[node name="Logger" type="Node" parent="."]
+script = ExtResource("3_log")

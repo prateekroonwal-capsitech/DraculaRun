@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/shadow/ShadowSensorSelfCheck.gd" id="1_check"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/sun/SunRig.tscn" id="2_sun"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/shadow/ShadowSensor.gd" id="3_sensor"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_wall.tres" id="4_stone"]
+[ext_resource type="Material" path="res://game/assets/materials/iron.tres" id="5_iron"]
+[ext_resource type="Script" path="res://game/autoloads/Logger.gd" id="6_log"]
+
+[sub_resource type="BoxShape3D" id="Shape_box"]
+size = Vector3(4, 6, 4)
+
+[sub_resource type="BoxMesh" id="Mesh_box"]
+size = Vector3(4, 6, 4)
+
+[node name="ShadowSensorSelfCheck" type="Node3D" node_paths=PackedStringArray("sun_rig", "sensor", "probe", "logger")]
+script = ExtResource("1_check")
+sun_rig = NodePath("SunRig")
+sensor = NodePath("ShadowSensor")
+probe = NodePath("Probe")
+logger = NodePath("Logger")
+
+[node name="CasterBox" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, -10)
+editor_description = "Shadow caster: 4x6x4 box (x -2..2, y 0..6, z -12..-8) on the shadow_caster layer only."
+collision_layer = 8
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape3D" parent="CasterBox"]
+shape = SubResource("Shape_box")
+
+[node name="Mesh" type="MeshInstance3D" parent="CasterBox"]
+mesh = SubResource("Mesh_box")
+surface_material_override/0 = ExtResource("4_stone")
+
+[node name="ObstacleBox" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 3, -10)
+editor_description = "Obstacle-layer body (NOT a caster): must never create gameplay shade."
+collision_layer = 4
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape3D" parent="ObstacleBox"]
+shape = SubResource("Shape_box")
+
+[node name="Mesh" type="MeshInstance3D" parent="ObstacleBox"]
+mesh = SubResource("Mesh_box")
+surface_material_override/0 = ExtResource("5_iron")
+
+[node name="SunRig" parent="." instance=ExtResource("2_sun")]
+
+[node name="Probe" type="Marker3D" parent="."]
+
+[node name="ShadowSensor" type="Node3D" parent="."]
+script = ExtResource("3_sensor")
+
+[node name="Logger" type="Node" parent="."]
+script = ExtResource("6_log")

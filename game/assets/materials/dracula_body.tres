@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/burn_rim.tres" id="1_rim"]
+
+[resource]
+next_pass = ExtResource("1_rim")
+albedo_color = Color(0.07, 0.05, 0.09, 1)
+roughness = 0.55

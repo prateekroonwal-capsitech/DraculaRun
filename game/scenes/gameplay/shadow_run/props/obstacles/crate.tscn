@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/iron.tres" id="m0"]
+[ext_resource type="Material" path="res://game/assets/materials/wood_crate.tres" id="m1"]
+
+[sub_resource type="BoxMesh" id="Mesh_0"]
+size = Vector3(1.2, 1.2, 1.2)
+
+[sub_resource type="BoxShape3D" id="Shape_0"]
+size = Vector3(1.2, 1.2, 1.2)
+
+[sub_resource type="BoxMesh" id="Mesh_1"]
+size = Vector3(1.25, 0.12, 1.25)
+
+[sub_resource type="BoxMesh" id="Mesh_2"]
+size = Vector3(1.25, 0.12, 1.25)
+
+[sub_resource type="BoxShape3D" id="ObShape_0"]
+size = Vector3(1.2, 1.2, 1.2)
+
+[node name="crate" type="Node3D"]
+editor_description = "Wooden crate: blocks its lane and casts a small shadow. Origin: lane center at ground."
+
+[node name="Mesh0" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+mesh = SubResource("Mesh_0")
+surface_material_override/0 = ExtResource("m1")
+
+[node name="Mesh1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_1")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_2")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="ShadowCaster" type="StaticBody3D" parent="."]
+collision_layer = 8
+collision_mask = 0
+
+[node name="Shape0" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("Shape_0")
+
+[node name="ObstacleBody" type="StaticBody3D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="Shape0" type="CollisionShape3D" parent="ObstacleBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("ObShape_0")

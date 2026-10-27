@@ -1,0 +1,168 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/ui/mfw/ShadowRunHUD.gd" id="1_hud"]
+[ext_resource type="Script" path="res://game/scenes/ui/mfw/ExposureMeter.gd" id="2_meter"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunControl.tscn" id="3_sun"]
+[ext_resource type="Shader" path="res://game/assets/shaders/burn_vignette.gdshader" id="4_vig"]
+
+[sub_resource type="ShaderMaterial" id="Mat_vignette"]
+resource_local_to_scene = true
+shader = ExtResource("4_vig")
+shader_parameter/tint = Color(1, 0.36, 0.05, 1)
+shader_parameter/strength = 0.0
+shader_parameter/softness = 0.55
+
+[sub_resource type="StyleBoxFlat" id="Style_pause"]
+bg_color = Color(0.08, 0.05, 0.12, 0.7)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.86, 0.5, 0.8)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+
+[node name="ShadowRunHUD" type="Control" node_paths=PackedStringArray("safe_area")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+safe_area = NodePath("SafeArea")
+
+[node name="BurnVignette" type="ColorRect" parent="."]
+unique_name_in_owner = true
+material = SubResource("Mat_vignette")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="TopBar" type="MarginContainer" parent="SafeArea/Layout"]
+editor_description = "~10% of the screen: pause, distance, exposure meter."
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 10.0
+mouse_filter = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 8
+
+[node name="Row" type="HBoxContainer" parent="SafeArea/Layout/TopBar"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 24
+
+[node name="PauseButton" type="Button" parent="SafeArea/Layout/TopBar/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 120)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_font_sizes/font_size = 52
+theme_override_styles/normal = SubResource("Style_pause")
+theme_override_styles/hover = SubResource("Style_pause")
+theme_override_styles/pressed = SubResource("Style_pause")
+text = "II"
+
+[node name="DistanceLabel" type="Label" parent="SafeArea/Layout/TopBar/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.03, 0.08, 1)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 68
+text = "0 m"
+vertical_alignment = 1
+
+[node name="ExposureMeter" type="Control" parent="SafeArea/Layout/TopBar/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 116)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("2_meter")
+
+[node name="PlayView" type="Control" parent="SafeArea/Layout"]
+editor_description = "~68%: the 3D road shows through here. Touches starting here are lane swipes. Keep it free of UI except transient labels."
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 68.0
+mouse_filter = 2
+
+[node name="HintLabel" type="Label" parent="SafeArea/Layout/PlayView"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 140.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.03, 0.1, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 44
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CountdownLabel" type="Label" parent="SafeArea/Layout/PlayView"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.25
+anchor_right = 1.0
+anchor_bottom = 0.45
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
+theme_override_colors/font_outline_color = Color(0.25, 0.02, 0.05, 1)
+theme_override_constants/outline_size = 24
+theme_override_font_sizes/font_size = 180
+text = "3"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DebugButton" type="Button" parent="SafeArea/Layout/PlayView"]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0.22)
+custom_minimum_size = Vector2(96, 64)
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+grow_vertical = 0
+focus_mode = 0
+theme_override_font_sizes/font_size = 28
+flat = true
+text = "dbg"
+
+[node name="SunControl" parent="SafeArea/Layout" instance=ExtResource("3_sun")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 22.0

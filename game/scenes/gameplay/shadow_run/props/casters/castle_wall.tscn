@@ -1,0 +1,130 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/stone_wall.tres" id="m0"]
+
+[sub_resource type="BoxMesh" id="Mesh_0"]
+size = Vector3(1.6, 8, 12)
+
+[sub_resource type="BoxShape3D" id="Shape_0"]
+size = Vector3(1.6, 8, 12)
+
+[sub_resource type="BoxMesh" id="Mesh_1"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_1"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_2"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_2"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_3"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_3"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_4"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_4"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_5"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_5"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_6"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_6"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxMesh" id="Mesh_7"]
+size = Vector3(1.6, 1, 0.8)
+
+[sub_resource type="BoxShape3D" id="Shape_7"]
+size = Vector3(1.6, 1, 0.8)
+
+[node name="castle_wall" type="Node3D"]
+editor_description = "Castle wall 12m long, 8m tall + 1m merlons. Origin: footprint center."
+
+[node name="Mesh0" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("Mesh_0")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -5.14286)
+mesh = SubResource("Mesh_1")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -3.42857)
+mesh = SubResource("Mesh_2")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -1.71429)
+mesh = SubResource("Mesh_3")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 0)
+mesh = SubResource("Mesh_4")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh5" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 1.71429)
+mesh = SubResource("Mesh_5")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh6" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 3.42857)
+mesh = SubResource("Mesh_6")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="Mesh7" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 5.14286)
+mesh = SubResource("Mesh_7")
+surface_material_override/0 = ExtResource("m0")
+
+[node name="ShadowCaster" type="StaticBody3D" parent="."]
+collision_layer = 8
+collision_mask = 0
+
+[node name="Shape0" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+shape = SubResource("Shape_0")
+
+[node name="Shape1" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -5.14286)
+shape = SubResource("Shape_1")
+
+[node name="Shape2" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -3.42857)
+shape = SubResource("Shape_2")
+
+[node name="Shape3" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, -1.71429)
+shape = SubResource("Shape_3")
+
+[node name="Shape4" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 0)
+shape = SubResource("Shape_4")
+
+[node name="Shape5" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 1.71429)
+shape = SubResource("Shape_5")
+
+[node name="Shape6" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 3.42857)
+shape = SubResource("Shape_6")
+
+[node name="Shape7" type="CollisionShape3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 5.14286)
+shape = SubResource("Shape_7")

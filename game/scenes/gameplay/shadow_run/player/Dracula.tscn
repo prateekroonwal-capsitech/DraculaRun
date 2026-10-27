@@ -1,0 +1,131 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/player/DraculaController.gd" id="1_ctrl"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_body.tres" id="2_body"]
+[ext_resource type="AudioStream" path="res://game/assets/audio/sfx/lane_whoosh.wav" id="3_whoosh"]
+[ext_resource type="AudioStream" path="res://game/assets/audio/sfx/burn_sizzle.wav" id="4_sizzle"]
+[ext_resource type="AudioStream" path="res://game/assets/audio/sfx/death_sting.wav" id="5_sting"]
+[ext_resource type="AudioStream" path="res://game/assets/audio/sfx/stumble_thud.wav" id="6_thud"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_head.tres" id="7_head"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_eye.tres" id="8_eye"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_cape.tres" id="9_cape"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_lining.tres" id="10_lining"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/BurnFX.tscn" id="11_burn"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DeathFX.tscn" id="12_death"]
+[ext_resource type="Material" path="res://game/assets/materials/burn_rim.tres" id="13_rim"]
+
+[sub_resource type="CapsuleShape3D" id="Shape_body"]
+radius = 0.3
+height = 1.6
+
+[sub_resource type="BoxShape3D" id="Shape_hit"]
+size = Vector3(0.7, 1.5, 0.5)
+
+[sub_resource type="CapsuleMesh" id="Mesh_body"]
+radius = 0.3
+height = 1.45
+
+[sub_resource type="SphereMesh" id="Mesh_head"]
+radius = 0.19
+height = 0.38
+
+[sub_resource type="SphereMesh" id="Mesh_eye"]
+radius = 0.03
+height = 0.06
+radial_segments = 8
+rings = 4
+
+[sub_resource type="BoxMesh" id="Mesh_cape"]
+size = Vector3(0.95, 1.25, 0.04)
+
+[sub_resource type="BoxMesh" id="Mesh_lining"]
+size = Vector3(0.88, 1.18, 0.02)
+
+[sub_resource type="PrismMesh" id="Mesh_collar"]
+size = Vector3(0.7, 0.35, 0.05)
+
+[node name="Dracula" type="CharacterBody3D" node_paths=PackedStringArray("visual", "hitbox", "smoke", "embers", "flare_light", "ash", "bats", "sample_points")]
+collision_layer = 2
+collision_mask = 0
+motion_mode = 1
+script = ExtResource("1_ctrl")
+visual = NodePath("Visual")
+hitbox = NodePath("HitBox")
+smoke = NodePath("BurnFX/Smoke")
+embers = NodePath("BurnFX/Embers")
+flare_light = NodePath("BurnFX/FlareLight")
+ash = NodePath("DeathFX/Ash")
+bats = NodePath("DeathFX/Bats")
+sample_points = [NodePath("FeetSample"), NodePath("TorsoSample"), NodePath("HeadSample")]
+rim_material = ExtResource("13_rim")
+whoosh_sfx = ExtResource("3_whoosh")
+sizzle_sfx = ExtResource("4_sizzle")
+death_sting_sfx = ExtResource("5_sting")
+stumble_sfx = ExtResource("6_thud")
+
+[node name="BodyShape" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("Shape_body")
+
+[node name="HitBox" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 4
+monitorable = false
+
+[node name="HitShape" type="CollisionShape3D" parent="HitBox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("Shape_hit")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+mesh = SubResource("Mesh_body")
+surface_material_override/0 = ExtResource("2_body")
+
+[node name="Head" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.62, 0)
+mesh = SubResource("Mesh_head")
+surface_material_override/0 = ExtResource("7_head")
+
+[node name="EyeL" type="MeshInstance3D" parent="Visual/Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.07, 0.02, -0.17)
+cast_shadow = 0
+mesh = SubResource("Mesh_eye")
+surface_material_override/0 = ExtResource("8_eye")
+
+[node name="EyeR" type="MeshInstance3D" parent="Visual/Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 0.02, -0.17)
+cast_shadow = 0
+mesh = SubResource("Mesh_eye")
+surface_material_override/0 = ExtResource("8_eye")
+
+[node name="Cape" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 0.974, -0.225, 0, 0.225, 0.974, 0, 0.82, 0.38)
+mesh = SubResource("Mesh_cape")
+surface_material_override/0 = ExtResource("9_cape")
+
+[node name="Lining" type="MeshInstance3D" parent="Visual/Cape"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+cast_shadow = 0
+mesh = SubResource("Mesh_lining")
+surface_material_override/0 = ExtResource("10_lining")
+
+[node name="Collar" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.24)
+cast_shadow = 0
+mesh = SubResource("Mesh_collar")
+surface_material_override/0 = ExtResource("10_lining")
+
+[node name="FeetSample" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+
+[node name="TorsoSample" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="HeadSample" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+
+[node name="BurnFX" parent="." instance=ExtResource("11_burn")]
+
+[node name="DeathFX" parent="." instance=ExtResource("12_death")]

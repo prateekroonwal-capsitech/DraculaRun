@@ -1,0 +1,138 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/Backdrop.gd" id="1_bd"]
+[ext_resource type="Material" path="res://game/assets/materials/backdrop_hill.tres" id="m_hill"]
+[ext_resource type="Material" path="res://game/assets/materials/backdrop_hill_far.tres" id="m_far"]
+[ext_resource type="Material" path="res://game/assets/materials/backdrop_castle.tres" id="m_castle"]
+
+[sub_resource type="SphereMesh" id="Mesh_0"]
+radius = 90
+height = 90
+radial_segments = 24
+rings = 8
+is_hemisphere = true
+
+[sub_resource type="SphereMesh" id="Mesh_1"]
+radius = 110
+height = 110
+radial_segments = 24
+rings = 8
+is_hemisphere = true
+
+[sub_resource type="SphereMesh" id="Mesh_2"]
+radius = 70
+height = 70
+radial_segments = 24
+rings = 8
+is_hemisphere = true
+
+[sub_resource type="BoxMesh" id="Mesh_3"]
+size = Vector3(26, 30, 18)
+
+[sub_resource type="BoxMesh" id="Mesh_4"]
+size = Vector3(8, 46, 8)
+
+[sub_resource type="PrismMesh" id="Mesh_5"]
+size = Vector3(10, 14, 10)
+
+[sub_resource type="BoxMesh" id="Mesh_6"]
+size = Vector3(8, 40, 8)
+
+[sub_resource type="PrismMesh" id="Mesh_7"]
+size = Vector3(10, 12, 10)
+
+[sub_resource type="BoxMesh" id="Mesh_8"]
+size = Vector3(6, 60, 6)
+
+[sub_resource type="PrismMesh" id="Mesh_9"]
+size = Vector3(8, 18, 8)
+
+[sub_resource type="BoxMesh" id="Mesh_10"]
+size = Vector3(10, 34, 10)
+
+[sub_resource type="BoxMesh" id="Mesh_11"]
+size = Vector3(7, 22, 7)
+
+[sub_resource type="BoxMesh" id="Mesh_12"]
+size = Vector3(30, 10, 6)
+
+[node name="Backdrop" type="Node3D"]
+script = ExtResource("1_bd")
+
+[node name="Part0" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, -40, -230)
+cast_shadow = 0
+mesh = SubResource("Mesh_0")
+surface_material_override/0 = ExtResource("m_hill")
+
+[node name="Part1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, -60, -260)
+cast_shadow = 0
+mesh = SubResource("Mesh_1")
+surface_material_override/0 = ExtResource("m_hill")
+
+[node name="Part2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, -45, -300)
+cast_shadow = 0
+mesh = SubResource("Mesh_2")
+surface_material_override/0 = ExtResource("m_far")
+
+[node name="Part3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 50, -215)
+cast_shadow = 0
+mesh = SubResource("Mesh_3")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -112, 58, -210)
+cast_shadow = 0
+mesh = SubResource("Mesh_4")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part5" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -112, 88, -210)
+cast_shadow = 0
+mesh = SubResource("Mesh_5")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part6" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -78, 55, -212)
+cast_shadow = 0
+mesh = SubResource("Mesh_6")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part7" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -78, 81, -212)
+cast_shadow = 0
+mesh = SubResource("Mesh_7")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part8" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 70, -222)
+cast_shadow = 0
+mesh = SubResource("Mesh_8")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part9" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 109, -222)
+cast_shadow = 0
+mesh = SubResource("Mesh_9")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part10" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 105, 20, -240)
+cast_shadow = 0
+mesh = SubResource("Mesh_10")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part11" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 125, 14, -232)
+cast_shadow = 0
+mesh = SubResource("Mesh_11")
+surface_material_override/0 = ExtResource("m_castle")
+
+[node name="Part12" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 115, 8, -236)
+cast_shadow = 0
+mesh = SubResource("Mesh_12")
+surface_material_override/0 = ExtResource("m_castle")

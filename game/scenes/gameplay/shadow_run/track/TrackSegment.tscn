@@ -1,0 +1,81 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/track/TrackSegment.gd" id="1_seg"]
+[ext_resource type="Material" path="res://game/assets/materials/road_cobbles.tres" id="2_road"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_trim.tres" id="3_curb"]
+[ext_resource type="Material" path="res://game/assets/materials/stone_dark.tres" id="4_walk"]
+[ext_resource type="Material" path="res://game/assets/materials/ground_dirt.tres" id="5_dirt"]
+
+[sub_resource type="BoxMesh" id="Mesh_road"]
+size = Vector3(10, 0.2, 30)
+
+[sub_resource type="BoxMesh" id="Mesh_curb"]
+size = Vector3(0.3, 0.25, 30)
+
+[sub_resource type="BoxMesh" id="Mesh_walk"]
+size = Vector3(3.5, 0.2, 30)
+
+[sub_resource type="BoxMesh" id="Mesh_dirt"]
+size = Vector3(40, 0.2, 30)
+
+[sub_resource type="BoxShape3D" id="Shape_ground"]
+size = Vector3(97, 0.2, 30)
+
+[node name="TrackSegment" type="Node3D"]
+script = ExtResource("1_seg")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="GroundShape" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -15)
+shape = SubResource("Shape_ground")
+
+[node name="Road" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_road")
+surface_material_override/0 = ExtResource("2_road")
+
+[node name="CurbL" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.15, 0.02, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_curb")
+surface_material_override/0 = ExtResource("3_curb")
+
+[node name="CurbR" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 0.02, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_curb")
+surface_material_override/0 = ExtResource("3_curb")
+
+[node name="WalkL" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.05, 0, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_walk")
+surface_material_override/0 = ExtResource("4_walk")
+
+[node name="WalkR" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.05, 0, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_walk")
+surface_material_override/0 = ExtResource("4_walk")
+
+[node name="DirtL" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28.8, -0.05, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_dirt")
+surface_material_override/0 = ExtResource("5_dirt")
+
+[node name="DirtR" type="MeshInstance3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28.8, -0.05, -15)
+cast_shadow = 0
+mesh = SubResource("Mesh_dirt")
+surface_material_override/0 = ExtResource("5_dirt")
+
+[node name="Casters" type="Node3D" parent="."]
+
+[node name="Obstacles" type="Node3D" parent="."]
+
+[node name="OptionalObstacles" type="Node3D" parent="."]

@@ -1,0 +1,65 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/fx_smoke.tres" id="1_smoke"]
+[ext_resource type="Material" path="res://game/assets/materials/fx_ember.tres" id="2_ember"]
+
+[sub_resource type="QuadMesh" id="Mesh_smoke"]
+material = ExtResource("1_smoke")
+size = Vector2(0.45, 0.45)
+
+[sub_resource type="Gradient" id="Grad_smoke"]
+offsets = PackedFloat32Array(0, 0.25, 1)
+colors = PackedColorArray(0.55, 0.35, 0.22, 0, 0.3, 0.26, 0.25, 0.65, 0.12, 0.11, 0.12, 0)
+
+[sub_resource type="QuadMesh" id="Mesh_ember"]
+material = ExtResource("2_ember")
+size = Vector2(0.08, 0.08)
+
+[sub_resource type="Gradient" id="Grad_ember"]
+offsets = PackedFloat32Array(0, 0.6, 1)
+colors = PackedColorArray(1, 0.85, 0.35, 1, 1, 0.38, 0.05, 1, 0.6, 0.1, 0.02, 0)
+
+[node name="BurnFX" type="Node3D"]
+editor_description = "Continuous burn feedback. DraculaController scales Smoke/Embers amount_ratio and FlareLight energy with exposure."
+
+[node name="FlareLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+light_color = Color(1, 0.5, 0.12, 1)
+light_energy = 0.0
+omni_range = 4.5
+
+[node name="Smoke" type="CPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+cast_shadow = 0
+emitting = false
+amount = 28
+lifetime = 0.9
+local_coords = false
+mesh = SubResource("Mesh_smoke")
+emission_shape = 3
+emission_box_extents = Vector3(0.3, 0.7, 0.2)
+direction = Vector3(0, 1, 0)
+spread = 25.0
+gravity = Vector3(0, 2.2, 0)
+initial_velocity_min = 0.6
+initial_velocity_max = 1.6
+scale_amount_min = 0.6
+scale_amount_max = 1.6
+color_ramp = SubResource("Grad_smoke")
+
+[node name="Embers" type="CPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+cast_shadow = 0
+emitting = false
+amount = 24
+lifetime = 0.7
+local_coords = false
+mesh = SubResource("Mesh_ember")
+emission_shape = 3
+emission_box_extents = Vector3(0.3, 0.7, 0.2)
+direction = Vector3(0, 1, 0)
+spread = 40.0
+gravity = Vector3(0, 3, 0)
+initial_velocity_min = 1.0
+initial_velocity_max = 2.5
+color_ramp = SubResource("Grad_ember")

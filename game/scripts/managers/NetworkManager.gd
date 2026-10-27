@@ -95,4 +95,3 @@ func _call(fn_name: String, payload: Dictionary) -> Dictionary:
 	if _logger:
 		_logger.error("NetworkManager: bad response", { "fn": fn_name })
 	return {}
-
