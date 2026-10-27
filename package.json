@@ -1,0 +1,18 @@
+{
+  "name": "game-template-backend",
+  "private": true,
+  "workspaces": [
+    "addons/firebaseServer"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "deploy:staging": "firebase use staging && firebase deploy --only functions",
+    "deploy:prod": "firebase use production && firebase deploy --only functions",
+    "emulator": "firebase emulators:start"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

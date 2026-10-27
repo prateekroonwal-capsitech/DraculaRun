@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://dknk8q3k35c5c"]
+
+[ext_resource type="Script" path="res://addons/datamanager/tests/DataFrameworkTest.gd" id="1_test"]
+
+[node name="DataFrameworkTest" type="Node"]
+script = ExtResource("1_test")

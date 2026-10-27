@@ -1,0 +1,128 @@
+{
+  "identity": {
+    "userId": "string",
+    "authProvider": "guest",
+    "signedIn": true,
+    "email": null,
+    "fcmToken": "push-messaging-token"
+  },
+  "profile": {
+    "displayName": "string",
+    "isCustomName": false,
+    "avatarId": "string",
+    "frameId": "string",
+    "badgeId": "string",
+    "countryCode": "US",
+    "photoUrl": null
+  },
+  "device": {
+    "appVersion": "1.0.0"
+  },
+  "metadata": {
+    "schemaVersion": 1,
+    "revision": 1,
+    "createdAt": 0,
+    "lastLoginAt": 0,
+    "lastSavedAt": 0,
+    "dirty": {
+      "bucketName": true
+    }
+  },
+  "session": {
+    "screenTimeSeconds": 0,
+    "lastSessionDateUTC": "2026-08-31T00:00:00Z",
+    "sessionCount": 0
+  },
+  "settings": {
+    "musicEnabled": true,
+    "sfxEnabled": true,
+    "hapticsEnabled": true,
+    "musicVolume": 0.8,
+    "sfxVolume": 0.8,
+    "locale": "en-US"
+  },
+  "progression": {
+    "currentLevel": 1,
+    "unlockedLevels": 1,
+    "levelStars": {
+      "levelId": 3
+    },
+    "xp": 0,
+    "areas": {
+      "areaId": {
+        "unlocked": true,
+        "completed": false,
+        "stars": 0,
+        "quests": {
+          "questId": 0
+        }
+      }
+    },
+    "achievementsUnlocked": ["achievementId"]
+  },
+  "economy": {
+    "currencies": {
+      "coins": 0,
+      "gems": 0,
+      "energy": 0,
+      "blueprints": 0
+    }
+  },
+  "inventory": {
+    "equipped": {
+      "slotType": "itemId"
+    },
+    "owned": {
+      "category": ["itemId"]
+    },
+    "boosters": {
+      "boosterId": 1
+    }
+  },
+  "liveOps": {
+    "dailyReward": {
+      "currentDay": 0,
+      "lastClaimedDate": "2026-08-31",
+      "streak": 0
+    },
+    "chests": {
+      "chestId": {
+        "claimed": false,
+        "claimedAt": 0
+      }
+    }
+  },
+  "stats": {
+    "matchesPlayed": 0,
+    "matchesWon": 0,
+    "matchesLost": 0,
+    "winStreak": 0,
+    "custom": {
+      "accuracy": 0,
+      "elo": 0,
+      "kd": 0
+    }
+  },
+  "tutorials": {
+    "seen": {
+      "tutorialId": true
+    },
+    "ftueCompleted": false,
+    "termsAccepted": true
+  },
+  "monetization": {
+    "adWatchCounts": {
+      "adType": 0
+    },
+    "removeAdsPurchased": false,
+    "purchaseHistory": [
+      {
+        "productId": "productId",
+        "timestamp": 0
+      }
+    ],
+    "entitlements": {
+      "entitlementId": {}
+    }
+  }
+}

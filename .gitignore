@@ -1,0 +1,44 @@
+# ── Godot ──────────────────────────────────────────────────────────────────
+.godot/
+/android/
+/ios/
+export_presets.cfg
+
+# ── Node.js / Firebase ──────────────────────────────────────────────────────
+node_modules/
+dist/
+lib/
+*.js.map
+.npm/
+
+# ── Environment & Secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+service-account.json
+*.pem
+*.key
+
+# ── Firebase ────────────────────────────────────────────────────────────────
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+
+# ── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+*.uid
+
+
+analysis_resultsss.md
+tomm.txt

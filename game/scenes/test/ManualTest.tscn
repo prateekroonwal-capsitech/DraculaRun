@@ -1,0 +1,94 @@
+[gd_scene format=3 uid="uid://bx44asopwnhnr"]
+
+[ext_resource type="Script" path="res://game/scenes/test/ManualTest.gd" id="1_25bc4"]
+
+[node name="ManualTest" type="Control" unique_id=1552848442]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_25bc4")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=605170949]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer" unique_id=139757958]
+layout_mode = 2
+text = "My DataManager CRUD Test"
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer" unique_id=202743732]
+layout_mode = 2
+text = "Status: Initializing..."
+
+[node name="HBoxEconomy" type="HBoxContainer" parent="VBoxContainer" unique_id=611502381]
+layout_mode = 2
+
+[node name="BtnAddCoins" type="Button" parent="VBoxContainer/HBoxEconomy" unique_id=1045833055]
+layout_mode = 2
+text = " Add 100 Coins"
+
+[node name="BtnSpendCoins" type="Button" parent="VBoxContainer/HBoxEconomy" unique_id=1997754992]
+layout_mode = 2
+text = "Spend 50 Coins"
+
+[node name="HBoxProgression" type="HBoxContainer" parent="VBoxContainer" unique_id=700320572]
+layout_mode = 2
+
+[node name="BtnCompleteLevel" type="Button" parent="VBoxContainer/HBoxProgression" unique_id=429519060]
+layout_mode = 2
+text = " Complete Level (+XP)"
+
+[node name="HBoxMetadata" type="HBoxContainer" parent="VBoxContainer" unique_id=159813585]
+layout_mode = 2
+
+[node name="BtnSetMeta" type="Button" parent="VBoxContainer/HBoxMetadata" unique_id=1700634750]
+layout_mode = 2
+text = "Set VIP Metadata"
+
+[node name="HBoxIdentity" type="HBoxContainer" parent="VBoxContainer" unique_id=1392658271]
+layout_mode = 2
+
+[node name="BtnSetWhat" type="Button" parent="VBoxContainer/HBoxIdentity" unique_id=1211316741]
+layout_mode = 2
+text = "Set Identity"
+
+[node name="HBoxPersistence" type="HBoxContainer" parent="VBoxContainer" unique_id=2120910626]
+layout_mode = 2
+
+[node name="BtnSave" type="Button" parent="VBoxContainer/HBoxPersistence" unique_id=201284884]
+layout_mode = 2
+text = "Save to Disk (save())"
+
+[node name="BtnReload" type="Button" parent="VBoxContainer/HBoxPersistence" unique_id=1554357332]
+layout_mode = 2
+text = "Reload from Disk (load_local_data())"
+
+[node name="BtnClear" type="Button" parent="VBoxContainer/HBoxPersistence" unique_id=1938790300]
+layout_mode = 2
+text = "Delete All Local Saves (clear_local())"
+
+[node name="LogLabel" type="RichTextLabel" parent="VBoxContainer" unique_id=477411944]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+
+[connection signal="pressed" from="VBoxContainer/HBoxEconomy/BtnAddCoins" to="." method="_on_btn_add_coins_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxEconomy/BtnSpendCoins" to="." method="_on_btn_spend_coins_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxProgression/BtnCompleteLevel" to="." method="_on_btn_complete_level_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxMetadata/BtnSetMeta" to="." method="_on_btn_set_meta_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxIdentity/BtnSetWhat" to="." method="_on_what_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxIdentity/BtnSetWhat" to="." method="_on_btn_set_meta_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxPersistence/BtnSave" to="." method="_on_btn_save_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxPersistence/BtnReload" to="." method="_on_btn_reload_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxPersistence/BtnClear" to="." method="_on_btn_clear_pressed"]

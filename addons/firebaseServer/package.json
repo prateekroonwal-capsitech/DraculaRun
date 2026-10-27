@@ -1,0 +1,21 @@
+{
+  "name": "@studio/firebase",
+  "version": "1.0.0",
+  "description": "Firebase Admin SDK implementations of core service interfaces",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@studio/core": "*",
+    "firebase-admin": "^12.0.0",
+    "inversify": "^6.0.2",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

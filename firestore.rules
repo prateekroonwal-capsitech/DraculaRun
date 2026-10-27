@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthed() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isAuthed() && request.auth.token.role == 'admin';
+    }
+
+    function isNotDeleted() {
+      return !('isDeleted' in resource.data) || resource.data.isDeleted == false;
+    }
+
+    // ── Users / Players ───────────────────────────────────────────────────────
+    // Supports both /users/{uid} (used by DataManager) and /players/{uid},
+    // as well as platform-segregated collections (e.g. users_android, android_users).
+    // Authenticated users can read and write their own documents.
+    match /{userCollection}/{uid} {
+      allow read, write: if (userCollection.matches('users.*') || userCollection.matches('.*_users') || userCollection == 'players') && (isOwner(uid) || isAdmin());
+
+      // Subcollections (for multi-document sync mode, progress, sessions, etc.)
+      match /{subcollection}/{docId} {
+        allow read, write: if (userCollection.matches('users.*') || userCollection.matches('.*_users') || userCollection == 'players') && (isOwner(uid) || isAdmin());
+      }
+    }
+
+    // ── Game Config (read-only for all authed users) ──────────────────────────
+    match /gameConfig/{document=**} {
+      allow read:  if isAuthed();
+      allow write: if isAdmin();
+    }
+
+    // ── Leaderboards (read all, write via backend only) ───────────────────────
+    match /leaderboards/{gameId}/{document=**} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Default deny ─────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
