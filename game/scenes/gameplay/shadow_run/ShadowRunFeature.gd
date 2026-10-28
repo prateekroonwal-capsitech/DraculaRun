@@ -92,6 +92,7 @@ var _hop_since: float = 0.0
 var _ray_query: PhysicsRayQueryParameters3D
 var _region: PackedByteArray = PackedByteArray()
 var _path_points: PackedVector3Array = PackedVector3Array()
+var _raw_path_points: PackedVector3Array = PackedVector3Array()
 
 # ── Injection ─────────────────────────────────────────────────────────────
 
@@ -217,10 +218,28 @@ func _physics_process(delta: float) -> void:
 		if _clock - _finger_time >= drag_start_time:
 			_begin_move_drag()
 		return
+	_update_drag_marker()
 	_repath_wait -= delta
 	if _repath_wait <= 0.0:
 		_repath_wait = 1.0 / maxf(1.0, drag_repath_rate)
 		_drag_update()
+
+func _update_drag_marker() -> void:
+	if not _move_dragging or move_marker == null or not is_instance_valid(level) or level.grid == null:
+		return
+	var world: Variant = ground_point(_finger_pos)
+	if world == null:
+		return
+	var grid := level.grid
+	var target := grid.cell_at(world)
+	if not grid.in_bounds(target):
+		return
+	var labels := grid.walk_labels()
+	var from := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
+	var mine := labels[grid.index_of(from)] if grid.in_bounds(from) else -1
+	var dest := grid.nearest_with_label(target, labels, mine, edge_penalty)
+	if grid.in_bounds(dest):
+		move_marker.hold_at(grid.cell_center(dest))
 
 # ── Sun ───────────────────────────────────────────────────────────────────
 
@@ -485,10 +504,12 @@ func _walk_cells(from: Vector2i, to: Vector2i, allow_hops: bool, run: bool) -> b
 	if cells.is_empty():
 		cells = [to]
 		hops = [false]
-	_path_points = PackedVector3Array()
+	_raw_path_points = PackedVector3Array()
 	for c in cells:
-		_path_points.append(grid.cell_center(c))
-	dracula.follow_path(_path_points, hops, run)
+		_raw_path_points.append(grid.cell_center(c))
+	var smoothed := grid.smooth_path(dracula.global_position, cells, hops)
+	_path_points = smoothed.points
+	dracula.follow_path(_path_points, smoothed.hops, run)
 	return true
 
 ## Walk to a world point if a shaded route exists; otherwise show the "no" cue.
@@ -517,6 +538,9 @@ func is_idle() -> bool:
 
 func current_path() -> PackedVector3Array:
 	return _path_points if dracula.is_moving() else PackedVector3Array()
+
+func raw_path() -> PackedVector3Array:
+	return _raw_path_points if dracula.is_moving() else PackedVector3Array()
 
 func _try_pending_tap() -> void:
 	if _pending_tap == null or not sun_rig.is_settled() or level.grid.is_busy():

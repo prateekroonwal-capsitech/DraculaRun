@@ -24,11 +24,15 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 @export var run_threshold: float = 2.0
 ## Speed gained/lost per second (m/s²): snappy start, short brake into the last cell.
 @export var acceleration: float = 45.0
+## Look-ahead distance along the smoothed path for continuous steering (m).
+@export var look_ahead_distance: float = 0.6
 ## Seconds per hop, whatever its length (keeps hops quick at any speed).
 @export var hop_time: float = 0.3
 @export var hop_height: float = 0.55
 
 @export_group("Turning")
+## Turn rate smoothing multiplier for lerp_angle (1/s).
+@export var turn_speed: float = 14.0
 ## Max turn rate toward his path direction, degrees per second (no lean, no tilt).
 @export var turn_speed_degrees: float = 720.0
 ## Direction changes bigger than this (degrees) are turned almost in place first,
@@ -36,11 +40,8 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 @export_range(30.0, 180.0) var turn_in_place_angle: float = 100.0
 ## ...and he sets off again once he faces within this many degrees of the path.
 @export_range(1.0, 90.0) var turn_in_place_release: float = 20.0
-## He faces a point this far ahead along the path (m): smooths the 8-way grid zigzag
-## and drag re-paths so his facing never jitters.
-@export var facing_lookahead: float = 0.8
-## Light smoothing of that facing target (1/s; higher = snappier).
-@export var facing_smoothing: float = 14.0
+## Speeds below this (m/s) ignore facing direction changes so he doesn't spin in place.
+@export var min_move_speed_for_facing: float = 0.2
 
 @export_group("Scene parts")
 ## Heading, hop, flinch and death transforms are applied to this node.
@@ -136,9 +137,11 @@ func get_sample_points() -> Array[Node3D]:
 func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
 	global_position = world
 	_heading = facing_radians
-	visual.rotation.y = _heading
+	visual.rotation = Vector3(0.0, _heading, 0.0)
 	_points.clear()
 	_index = 0
+	_cur_speed = 0.0
+	_turning_in_place = false
 	body_visual.reset_to_idle()
 
 ## Follow `points` (world positions, first = the first cell to step into).
@@ -189,8 +192,8 @@ func play_no_cue() -> void:
 ## Recoil from the sun (the guard refused a sun move).
 func play_flinch() -> void:
 	_kick_cue(func(tw: Tween) -> void:
-		tw.tween_property(visual, "rotation:x", deg_to_rad(flinch_degrees), 0.06)
-		tw.tween_property(visual, "rotation:x", 0.0, 0.18))
+		tw.tween_property(body_visual, "rotation:x", deg_to_rad(flinch_degrees), 0.06)
+		tw.tween_property(body_visual, "rotation:x", 0.0, 0.18))
 	if _haptics:
 		_haptics.light()
 
@@ -247,6 +250,9 @@ func _move(delta: float) -> void:
 	_update_burn_pulses(delta)
 	var prev_pos := global_position
 	_step_path(delta)
+	# Lock visual pitch and roll strictly to 0
+	visual.rotation.x = 0.0
+	visual.rotation.z = 0.0
 	# Animation: real ground speed (0 while turning in place → Idle; hops keep Run playing).
 	var ground := Vector2(global_position.x - prev_pos.x, global_position.z - prev_pos.z).length() / maxf(delta, 0.0001)
 	if is_moving() and _hops[_index] and _seg_travel > 0.0:
@@ -257,73 +263,135 @@ func _step_path(delta: float) -> void:
 	if not is_moving():
 		_turning_in_place = false
 		visual.position.y = lerpf(visual.position.y, 0.0, minf(1.0, delta * 12.0))
+		visual.rotation = Vector3(0.0, _heading, 0.0)
 		return
+
 	var hopping: bool = _hops[_index]
-	if _face_path(delta, hopping and _seg_travel > 0.0):
-		_cur_speed = 0.0   # turning almost in place before setting off
+	if hopping:
+		var to_land := _points[_index] - global_position
+		_face_direction(delta, to_land, true)
+		var speed := _seg_len / maxf(hop_time, 0.05)
+		_seg_travel = minf(_seg_travel + speed * delta, _seg_len)
+		var t := _seg_travel / _seg_len if _seg_len > 0.0001 else 1.0
+		var target := _points[_index]
+		var flat := _seg_from.lerp(target, t)
+		global_position = Vector3(flat.x, target.y, flat.z)
+		visual.position.y = sin(t * PI) * hop_height
+		if t >= 1.0:
+			_index += 1
+			if is_moving():
+				_begin_segment()
+			else:
+				_finish_path()
 		return
-	# Accelerate toward cruise speed; brake so he arrives at the last point, not past it.
-	var brake := sqrt(2.0 * acceleration * _remaining_distance())
-	_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 1.0))
-	var speed := _seg_len / maxf(hop_time, 0.05) if hopping else _cur_speed
-	_seg_travel = minf(_seg_travel + speed * delta, _seg_len)
-	var t := _seg_travel / _seg_len if _seg_len > 0.0001 else 1.0
-	var target := _points[_index]
-	var flat := _seg_from.lerp(target, t)
-	global_position = Vector3(flat.x, target.y, flat.z)
-	visual.position.y = sin(t * PI) * hop_height if hopping else 0.0
-	if t >= 1.0:
+
+	visual.position.y = 0.0
+	var look_pos := _get_look_ahead_point(look_ahead_distance)
+	var to_look := look_pos - global_position
+	var flat_dist := Vector2(to_look.x, to_look.z).length()
+	var steer_dir: Vector3
+	if flat_dist > 0.001:
+		steer_dir = Vector3(to_look.x, 0.0, to_look.z) / flat_dist
+	else:
+		var to_tgt := _points[_index] - global_position
+		var td := Vector2(to_tgt.x, to_tgt.z).length()
+		steer_dir = Vector3(to_tgt.x, 0.0, to_tgt.z) / maxf(td, 0.0001)
+
+	if _face_direction(delta, steer_dir, false):
+		_cur_speed = 0.0   # hold still for in-place turn
+		return
+
+	var rem := _remaining_distance()
+	if rem < 0.04:
+		_finish_path()
+		return
+
+	var brake := sqrt(2.0 * acceleration * rem)
+	_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 0.5))
+	var step := minf(_cur_speed * delta, rem)
+	global_position += steer_dir * step
+	global_position.y = _points[_index].y
+
+	# Advance waypoint if reached or passed
+	var to_wp := _points[_index] - global_position
+	var wp_dist := Vector2(to_wp.x, to_wp.z).length()
+	var advance := false
+	if wp_dist < 0.25:
+		advance = true
+	elif _index + 1 < _points.size() and not _hops[_index + 1]:
+		var next_seg := _points[_index + 1] - _points[_index]
+		var from_wp := global_position - _points[_index]
+		if Vector2(next_seg.x, next_seg.z).dot(Vector2(from_wp.x, from_wp.z)) > 0.0:
+			advance = true
+
+	if advance:
 		_index += 1
 		if is_moving():
 			_begin_segment()
 		else:
-			_points.clear()
-			_index = 0
-			_cur_speed = 0.0
-			arrived.emit()
+			_finish_path()
 
-## Turns toward the path direction at turn_speed_degrees. Returns true while he must hold
-## still to turn (a change bigger than turn_in_place_angle; never in mid-hop).
-func _face_path(delta: float, mid_hop: bool) -> bool:
-	var desired := _path_heading()
-	var err := absf(angle_difference(visual.rotation.y, desired))
+func _finish_path() -> void:
+	if not _points.is_empty():
+		var last := _points[-1]
+		global_position = Vector3(last.x, last.y, last.z)
+	_points.clear()
+	_index = 0
+	_cur_speed = 0.0
+	_turning_in_place = false
+	arrived.emit()
+
+func _face_direction(delta: float, dir: Vector3, mid_hop: bool) -> bool:
+	var flat := Vector2(dir.x, dir.z)
+	if flat.length_squared() < 0.0001:
+		visual.rotation = Vector3(0.0, _heading, 0.0)
+		return false
+	var desired := atan2(-flat.x, -flat.y)
+	var err := absf(angle_difference(_heading, desired))
+
 	if not mid_hop and err > deg_to_rad(turn_in_place_angle):
 		_turning_in_place = true
 	if _turning_in_place and (mid_hop or err < deg_to_rad(turn_in_place_release)):
 		_turning_in_place = false
+
 	if _turning_in_place:
-		_heading = desired
+		_heading = rotate_toward(_heading, desired, deg_to_rad(turn_speed_degrees) * delta)
+	elif not mid_hop and _cur_speed < min_move_speed_for_facing and is_moving():
+		pass
 	else:
-		_heading = lerp_angle(_heading, desired, 1.0 - exp(-facing_smoothing * delta))
-	visual.rotation.y = rotate_toward(visual.rotation.y, _heading, deg_to_rad(turn_speed_degrees) * delta)
+		_heading = lerp_angle(_heading, desired, minf(1.0, turn_speed * delta))
+
+	visual.rotation = Vector3(0.0, _heading, 0.0)
 	return _turning_in_place
 
-## Facing target: the point facing_lookahead metres ahead along the remaining path
-## (never past a hop; during a hop, the landing point).
-func _path_heading() -> float:
+func _get_look_ahead_point(dist: float) -> Vector3:
+	if not is_moving():
+		return global_position
+	if _hops[_index]:
+		return _points[_index]
 	var pos := global_position
-	var look := _points[_index]
-	if not _hops[_index]:
-		var left := facing_lookahead
-		var from := pos
-		for i in range(_index, _points.size()):
-			if i > _index and _hops[i]:
-				break
-			var p := _points[i]
-			var dd := Vector2(p.x - from.x, p.z - from.z).length()
-			if dd >= left:
-				look = from.lerp(p, left / dd)
-				break
-			left -= dd
-			from = p
-			look = p
-	var d := look - pos
-	if Vector2(d.x, d.z).length() < 0.05:
-		return _heading
-	return atan2(-d.x, -d.z)
+	var target := _points[_index]
+	var d := Vector2(target.x - pos.x, target.z - pos.z).length()
+	if d >= dist or _index == _points.size() - 1:
+		return pos.lerp(target, dist / maxf(d, 0.0001))
+	var remaining := dist - d
+	var from := target
+	for i in range(_index + 1, _points.size()):
+		if _hops[i]:
+			return from
+		var p := _points[i]
+		var seg := Vector2(p.x - from.x, p.z - from.z).length()
+		if seg >= remaining:
+			return from.lerp(p, remaining / maxf(seg, 0.0001))
+		remaining -= seg
+		from = p
+	return from
 
 func _remaining_distance() -> float:
-	var d := _seg_len - _seg_travel
+	if not is_moving():
+		return 0.0
+	var pos := global_position
+	var d := Vector2(_points[_index].x - pos.x, _points[_index].z - pos.z).length()
 	for i in range(_index + 1, _points.size()):
 		d += _points[i - 1].distance_to(_points[i])
 	return d

@@ -53,6 +53,8 @@ const CASTER_LAYER_BIT: int = 1 << 3   # project layer 4 "shadow_caster"
 @export var max_hop_distance: float = 1.0
 ## Extra path cost per hop (prefer walking when possible).
 @export var hop_penalty: float = 2.0
+## Corridor radius for line-of-sight path smoothing (m). Matches Dracula's footprint.
+@export var path_smoothing_radius: float = 0.15
 
 @export_group("Performance")
 ## Sun azimuth × elevation samples used at setup to find cells that can change shade.
@@ -81,6 +83,10 @@ var _clock: float = 0.0
 var _hop_cells: int = 0
 var _budget: int = 300
 var _walk_labels: PackedInt32Array = PackedInt32Array()   # walking-only regions, cached per shade pass
+# Tools only (LevelSolver): their own copy of the frozen shade + variable cells, so a solve
+# never touches the live arrays a running level uses.
+var _tool_shaded: PackedByteArray = PackedByteArray()
+var _tool_variable: PackedInt32Array = PackedInt32Array()
 
 func _ready() -> void:
 	_query = PhysicsRayQueryParameters3D.new()
@@ -92,7 +98,9 @@ func _ready() -> void:
 func setup(sun: SunRig, azimuth_min: float, azimuth_max: float, elevation_min: float, elevation_max: float) -> void:
 	_sun = sun
 	build_static()
-	_build_variable_mask(azimuth_min, azimuth_max, elevation_min, elevation_max)
+	var masks := _build_variable_mask(azimuth_min, azimuth_max, elevation_min, elevation_max)
+	_shaded = masks[0]
+	_variable = masks[1]
 	refresh_now()
 	set_physics_process(true)
 
@@ -198,8 +206,11 @@ func _physics_process(delta: float) -> void:
 
 ## Tools (LevelSolver): build the variable-cell mask for these sun ranges without a SunRig,
 ## exactly as setup() does, so compute_walkable_fast() matches the in-game shade.
+## Never modifies the live shade (safe to call on a running level).
 func prepare_variable_mask(az_min: float, az_max: float, el_min: float, el_max: float) -> void:
-	_build_variable_mask(az_min, az_max, el_min, el_max)
+	var masks := _build_variable_mask(az_min, az_max, el_min, el_max)
+	_tool_shaded = masks[0]
+	_tool_variable = masks[1]
 
 ## Walkable mask for a sun direction, re-casting only the variable cells (same truth the
 ## game uses). Call prepare_variable_mask() first.
@@ -208,8 +219,8 @@ func compute_walkable_fast(dir: Vector3) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(cell_count())
 	for i in cell_count():
-		out[i] = 1 if _solid[i] == 0 and _shaded[i] != 0 else 0
-	for i in _variable:
+		out[i] = 1 if _solid[i] == 0 and _tool_shaded[i] != 0 else 0
+	for i in _tool_variable:
 		out[i] = 1 if _ray_shaded(space, i, dir) else 0
 	return out
 
@@ -244,7 +255,9 @@ func _build_solid() -> void:
 		q.transform = Transform3D(global_basis, cell_center(c) + Vector3(0.0, solid_probe_heights.x + span * 0.5, 0.0))
 		_solid[i] = 1 if not space.intersect_shape(q, 1).is_empty() else 0
 
-func _build_variable_mask(az_min: float, az_max: float, el_min: float, el_max: float) -> void:
+## Returns [frozen shade (PackedByteArray), variable cell indices (PackedInt32Array)];
+## the caller decides where they go (live grid in setup(), tool copy for LevelSolver).
+func _build_variable_mask(az_min: float, az_max: float, el_min: float, el_max: float) -> Array:
 	var space := get_world_3d().direct_space_state
 	var n := cell_count()
 	var lit_seen := PackedByteArray()
@@ -266,14 +279,16 @@ func _build_variable_mask(az_min: float, az_max: float, el_min: float, el_max: f
 				shade_seen[i] = 1
 			else:
 				lit_seen[i] = 1
+	var base := PackedByteArray()
+	base.resize(n)
 	var variable := PackedByteArray()
 	variable.resize(n)
 	for i in n:
 		if _solid[i] == 0 and lit_seen[i] != 0 and shade_seen[i] != 0:
 			variable[i] = 1
-		_shaded[i] = 1 if shade_seen[i] != 0 and lit_seen[i] == 0 else 0
+		base[i] = 1 if shade_seen[i] != 0 and lit_seen[i] == 0 else 0
 	# Dilate by one cell: shade edges between samples may sit next to a variable cell.
-	_variable = PackedInt32Array()
+	var cells := PackedInt32Array()
 	for i in n:
 		if _solid[i] != 0:
 			continue
@@ -286,7 +301,8 @@ func _build_variable_mask(az_min: float, az_max: float, el_min: float, el_max: f
 				if in_bounds(nb) and variable[index_of(nb)] != 0:
 					take = true
 		if take:
-			_variable.append(i)
+			cells.append(i)
+	return [base, cells]
 
 func variable_cell_count() -> int:
 	return _variable.size()
@@ -448,6 +464,85 @@ static func _octile(dx: int, dy: int) -> float:
 	var ax := absi(dx)
 	var ay := absi(dy)
 	return float(maxi(ax, ay)) + 0.4142136 * float(mini(ax, ay))
+
+## Tests whether a straight line from `from_world` to `to_world`, widened by `radius`,
+## stays entirely inside walkable cells (shaded and not solid).
+func is_line_walkable(from_world: Vector3, to_world: Vector3, radius: float = 0.15) -> bool:
+	var v := to_world - from_world
+	v.y = 0.0
+	var dist := v.length()
+	if dist < 0.001:
+		return is_walkable(cell_at(from_world))
+	var dir := v / dist
+	var norm := Vector3(-dir.z, 0.0, dir.x)
+	var step := cell_size * 0.4
+	var steps := int(ceil(dist / step))
+	var actual_step := dist / float(maxi(1, steps))
+
+	var offsets: Array[float] = [0.0]
+	if radius > 0.01:
+		offsets.append(radius)
+		offsets.append(-radius)
+		if radius > 0.1:
+			offsets.append(radius * 0.5)
+			offsets.append(-radius * 0.5)
+
+	for s in range(steps + 1):
+		var p := from_world + dir * (s * actual_step)
+		var r_scale := 0.4 if (s == 0 or s == steps) else 1.0
+		for off in offsets:
+			var sp := p + norm * (off * r_scale)
+			var c := cell_at(sp)
+			if not is_walkable(c):
+				return false
+	return true
+
+## Smooths a cell path using line-of-sight (string pulling), preserving hops.
+## Returns {"points": PackedVector3Array, "hops": Array[bool]}
+func smooth_path(start_world: Vector3, cells: Array[Vector2i], hops: Array[bool], agent_radius: float = -1.0) -> Dictionary:
+	if cells.is_empty():
+		return {"points": PackedVector3Array(), "hops": []}
+	var r := path_smoothing_radius if agent_radius < 0.0 else agent_radius
+
+	var raw_pts: PackedVector3Array = PackedVector3Array()
+	raw_pts.append(start_world)
+	for c in cells:
+		raw_pts.append(cell_center(c))
+
+	var raw_hops: Array[bool] = [false]
+	for h in hops:
+		raw_hops.append(h)
+
+	var out_pts: PackedVector3Array = PackedVector3Array()
+	var out_hops: Array[bool] = []
+
+	var n := raw_pts.size()
+	var i := 0
+	while i < n - 1:
+		if raw_hops[i + 1]:
+			out_pts.append(raw_pts[i + 1])
+			out_hops.append(true)
+			i += 1
+			continue
+
+		var seg_end := i + 1
+		while seg_end < n - 1 and not raw_hops[seg_end + 1]:
+			seg_end += 1
+
+		var farthest := i + 1
+		for j in range(seg_end, i, -1):
+			if j == i + 1:
+				farthest = j
+				break
+			if is_line_walkable(raw_pts[i], raw_pts[j], r):
+				farthest = j
+				break
+
+		out_pts.append(raw_pts[farthest])
+		out_hops.append(false)
+		i = farthest
+
+	return {"points": out_pts, "hops": out_hops}
 
 ## Connected-region labels for an arbitrary walkable mask (walking + hops unless
 ## include_hops is false). Returns one label per cell (-1 = not walkable). Same moves as

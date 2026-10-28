@@ -79,6 +79,7 @@ toggle_debug_overlay={
 [physics]
 
 2d/physics_engine="Jolt Physics"
+common/physics_interpolation=true
 
 [rendering]
 

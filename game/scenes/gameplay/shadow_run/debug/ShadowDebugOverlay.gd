@@ -21,6 +21,9 @@ extends Node3D
 @export var solid_color: Color = Color(0.5, 0.5, 0.55, 0.45)
 @export var region_color: Color = Color(0.3, 0.6, 1.0, 0.6)
 @export var path_color: Color = Color.WHITE
+@export var raw_path_color: Color = Color(0.6, 0.6, 0.6, 0.7)
+## Draw raw grid path in grey alongside smoothed path in white (toggleable with F4).
+@export var show_raw_path: bool = false
 @export var cell_mesh: MultiMeshInstance3D
 @export var ray_mesh: MeshInstance3D
 @export var info_layer: CanvasLayer
@@ -55,6 +58,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_debug_overlay"):
 		toggle()
 		get_viewport().set_input_as_handled()
+		return
+	if visible and event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).physical_keycode == KEY_F4:
+			show_raw_path = not show_raw_path
+			get_viewport().set_input_as_handled()
 
 func _set_shown(shown: bool) -> void:
 	visible = shown
@@ -76,6 +84,7 @@ func _process(_delta: float) -> void:
 		"grid %dx%d @ %.2fm  variable %d" % [_grid.cols, _grid.rows, _grid.cell_size, _grid.variable_cell_count()],
 		"exposure %5.1f%%  lit points %d/%d" % [_sensor.exposure, roundi(_sensor.exposure_fraction * _sensor.debug_lit.size()), _sensor.debug_lit.size()],
 		"fps %d  nodes %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)],
+		"paths: white smoothed | [F4] raw grey: %s" % ["ON" if show_raw_path else "OFF"],
 	])
 
 func _draw_cells() -> void:
@@ -96,6 +105,14 @@ func _draw_lines() -> void:
 	var mesh := ray_mesh.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	if show_raw_path and _feature != null and _feature.has_method("raw_path"):
+		var raw: PackedVector3Array = _feature.raw_path()
+		var rprev := _dracula.global_position
+		for p in raw:
+			mesh.surface_set_color(raw_path_color)
+			mesh.surface_add_vertex(rprev + Vector3(0.0, 0.08, 0.0))
+			mesh.surface_add_vertex(p + Vector3(0.0, 0.08, 0.0))
+			rprev = p
 	var path: PackedVector3Array = _feature.current_path()
 	var prev := _dracula.global_position
 	for p in path:

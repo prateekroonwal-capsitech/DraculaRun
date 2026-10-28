@@ -15,7 +15,7 @@ extends Node3D
 @export var pulse_time: float = 0.45
 @export var start_scale: float = 0.35
 ## Drag mode: how quickly the held ring glides to a new target (1/s).
-@export var follow_rate: float = 18.0
+@export var follow_rate: float = 30.0
 
 var _tween: Tween
 var _target: Vector3
@@ -23,11 +23,12 @@ var _holding: bool = false
 
 func _ready() -> void:
 	visible = false
-	set_process(false)   # PDF §4: tick only while gliding in drag mode
+	set_process(false)
+	set_physics_process(false)   # PDF §4: tick only while gliding in drag mode
 
 func play_at(world: Vector3, ok: bool) -> void:
 	_holding = false
-	set_process(false)
+	set_physics_process(false)
 	global_position = world + Vector3(0.0, 0.03, 0.0)
 	ring.material_override = ok_material if ok else fail_material
 	visible = true
@@ -50,20 +51,20 @@ func hold_at(world: Vector3) -> void:
 		ring.scale = Vector3.ONE
 		ring.transparency = 0.0
 		visible = true
-		set_process(true)
+		set_physics_process(true)
 
 ## Drag cancelled (pause, death, goal): fade without a pulse.
 func fade_out() -> void:
 	if not _holding:
 		return
 	_holding = false
-	set_process(false)
+	set_physics_process(false)
 	_kill_tween()
 	_tween = create_tween()
 	_tween.tween_property(ring, "transparency", 1.0, pulse_time * 0.5)
 	_tween.tween_callback(func() -> void: visible = false)
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	global_position = global_position.lerp(_target, minf(1.0, follow_rate * delta))
 
 func _kill_tween() -> void:
