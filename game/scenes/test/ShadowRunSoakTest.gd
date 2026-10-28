@@ -151,6 +151,7 @@ func _check_basics(f: ShadowRunFeature, ui: UIManager) -> void:
 			_fail("tap on a walkable cell did not move Dracula there")
 	else:
 		_logger.info("Soak: tap check skipped (target not in play view in this viewport)")
+	await _check_turning(f, target)
 	await _check_drag(f, target)
 	# Exposure guard: drag toward the far end; the sun must stop short, no exposure.
 	var blocked := [false]
@@ -171,6 +172,53 @@ func _check_basics(f: ShadowRunFeature, ui: UIManager) -> void:
 	f.sun_rig.set_target(f.level.sun_start_azimuth, f.level.sun_start_elevation)
 	await _wait_settled(f)
 	f._on_sun_drag_ended()
+	await _wait_still(f)
+
+# ── Turning and animation ─────────────────────────────────────────────────
+
+## A target behind Dracula: he turns (almost) in place first and only sets off once he
+## faces the path; Locomotion is past the Walk point while running and back to Idle (0)
+## after arriving. Ends back on `home`.
+func _check_turning(f: ShadowRunFeature, home: Vector2i) -> void:
+	var grid := f.level.grid
+	var d := f.dracula
+	var tree := d.body_visual.animation_tree
+	var region := grid.region_from(grid.cell_at(d.global_position))
+	# Walkable cell 2–4 m behind him (toward +Z) in his region.
+	var behind := Vector2i(-1, -1)
+	for dist in [8, 7, 9, 6, 10, 5]:
+		for dx in [0, 1, -1, 2, -2]:
+			var c := grid.cell_at(d.global_position) + Vector2i(dx, -dist)
+			if grid.in_bounds(c) and region[grid.index_of(c)] != 0 and grid.lit_neighbours(c) == 0:
+				behind = c
+				break
+		if behind.x >= 0:
+			break
+	if behind.x < 0:
+		_logger.info("Soak: turning check skipped (no shade behind Dracula)")
+		return
+	var start_pos := d.global_position
+	f.move_to(grid.cell_center(behind))
+	var set_off_err := -1.0
+	var peak_blend := 0.0
+	for _i in 240:
+		await get_tree().physics_frame
+		peak_blend = maxf(peak_blend, float(tree.get(&"parameters/Locomotion/blend_position")))
+		if set_off_err < 0.0 and d.global_position.distance_to(start_pos) > 0.05:
+			var to := grid.cell_center(behind) - start_pos
+			set_off_err = rad_to_deg(absf(angle_difference(d.visual.rotation.y, atan2(-to.x, -to.z))))
+		if not d.is_moving() and set_off_err >= 0.0:
+			break
+	await _wait_still(f)
+	await _physics_frames(20)
+	if set_off_err < 0.0 or set_off_err > d.turn_in_place_release + 25.0:
+		_fail("turning: set off %.0f° away from the path (should turn first)" % set_off_err)
+	if peak_blend < d.body_visual.walk_clip_speed:
+		_fail("turning: Locomotion never reached Walk/Run while moving (peak %.2f)" % peak_blend)
+	if float(tree.get(&"parameters/Locomotion/blend_position")) > 0.05:
+		_fail("turning: not back to Idle after arriving")
+	_logger.info("Soak: turning OK — turned to %.0f° off the path before setting off, Locomotion peak %.2f, Idle after" % [set_off_err, peak_blend])
+	f.move_to(grid.cell_center(home))
 	await _wait_still(f)
 
 # ── Drag to move ──────────────────────────────────────────────────────────
@@ -311,7 +359,13 @@ func _play_level(f: ShadowRunFeature) -> void:
 			if f._finished:
 				break
 			if f.dracula.global_position.distance_to(dest) > 0.35:
-				_fail("level %d: could not walk to %s (stuck at %s)" % [f.level.level_number, str(cell), str(f.dracula.global_position)])
+				var g := f.level.grid
+				var from := g.nearest_walkable(g.cell_at(f.dracula.global_position), 1)
+				_fail("level %d: could not walk to %s (stuck at %s, cell %s / own cell %s shaded=%s; sun %.1f/%.1f settled=%s; grid busy=%s; exposure %.1f; target walkable=%s; path=%s)" % [
+					f.level.level_number, str(cell), str(f.dracula.global_position), str(from),
+					str(g.cell_at(f.dracula.global_position)), str(g.is_shaded(g.cell_at(f.dracula.global_position))),
+					f.sun_rig.azimuth, f.sun_rig.elevation, str(f.sun_rig.is_settled()), str(g.is_busy()), f.sensor.exposure,
+					str(g.is_walkable(cell)), str(not g.find_path(from, cell).is_empty())])
 				return
 			i += 1
 		else:
@@ -329,37 +383,24 @@ func _play_level(f: ShadowRunFeature) -> void:
 	_logger.info("Soak: level %d played with the %s (%d plan steps, %d taps, peak exposure %.1f)" % [
 		f.level.level_number, SunInput.MODE_KEYS[f.get_sun_mode()], plan.size(), taps, peak])
 
-## Steers the sun through `waypoints` with ONE joystick grab, like a thumb: deflection
-## shrinks as the sun nears each waypoint (rate control). False (and a failure) if stuck.
+## One dial grab per adjustment: put the finger on the sun knob, slide it to each
+## waypoint's dial point (the dial is absolute: the sun goes where the finger points).
 func _joystick_sun(f: ShadowRunFeature, waypoints: Array[Vector2]) -> bool:
 	var js := f.hud.get_joystick()
-	var c := js.knob_center_global()
-	js.press_at(c)
+	js.press_at(js.knob_center_global())
 	if not js.is_dragging():
-		_fail("joystick grab failed")
+		_fail("dial grab failed")
 		return false
 	for w in waypoints:
-		var t := 0.0
-		while t < step_timeout:
-			var d := w - Vector2(f.sun_rig.azimuth, f.sun_rig.elevation)
-			if d.length() < 0.4:
-				break
-			var m := clampf(0.14 + d.length() / 25.0, 0.2, 1.0)
-			js.move_to(c + Vector2(d.x, -d.y).normalized() * m * js.knob_travel)
-			await get_tree().physics_frame
-			t += get_physics_process_delta_time()
-		if t >= step_timeout:
+		js.move_to(js.point_for_angles(w.x, w.y))
+		await _wait_settled(f)
+		if absf(f.sun_rig.azimuth - w.x) > 0.6 or absf(f.sun_rig.elevation - w.y) > 0.6:
 			js.release()
-			_fail("level %d: joystick could not bring the sun to %.1f/%.1f (at %.1f/%.1f)" % [
+			_fail("level %d: dial could not bring the sun to %.1f/%.1f (at %.1f/%.1f)" % [
 				f.level.level_number, w.x, w.y, f.sun_rig.azimuth, f.sun_rig.elevation])
 			return false
 	js.release()
 	await _wait_settled(f)
-	var last := waypoints[waypoints.size() - 1]
-	if absf(f.sun_rig.azimuth - last.x) > 1.0 or absf(f.sun_rig.elevation - last.y) > 1.0:
-		_fail("level %d: sun drifted after release (%.1f/%.1f, wanted %.1f/%.1f)" % [
-			f.level.level_number, f.sun_rig.azimuth, f.sun_rig.elevation, last.x, last.y])
-		return false
 	return true
 
 ## Slider mode: one strip drag per waypoint, finger placed where the strip maps to it.
@@ -424,46 +465,89 @@ func _check_overlap(f: ShadowRunFeature, plan: Array, next_index: int) -> void:
 			_fail("level %d: %s is under the sun %s (screen %s, viewport %s)" % [
 				f.level.level_number, key, SunInput.MODE_KEYS[f.get_sun_mode()], str(sp.round()), str(view.size)])
 
-## Joystick feel and arbitration on level 1.
+## Sun dial (joystick mode) on level 1: the knob shows the real sun angle, the mapping
+## hits the range limits at the ring's edges, dragging moves the sun and it stays, release
+## keeps the target, keys move the knob, the guard stops the sun with the knob on the safe
+## angle and the dim marker on the refused one. Ends back on the level's start angle.
 func _check_joystick(f: ShadowRunFeature) -> void:
 	var js := f.hud.get_joystick()
-	# Response curve: deadzone, precise small pushes, max speed at full push.
-	if js.stick_rate(Vector2(js.deadzone * 0.9, 0.0)) != Vector2.ZERO:
-		_fail("joystick: deadzone moves the sun")
-	var small := js.stick_rate(Vector2(0.3, 0.0)).x
-	var full := js.stick_rate(Vector2(1.0, 0.0)).x
-	if not (small > 0.0 and small < full * 0.15 and is_equal_approx(full, js.max_speed)):
-		_fail("joystick: response curve off (30%% push %.1f °/s, full %.1f °/s)" % [small, full])
-	if js.stick_rate(Vector2(0.0, -1.0)).y <= 0.0:
-		_fail("joystick: pushing up must raise the sun")
-	_logger.info("Soak: joystick curve — 30%% push %.1f °/s, 60%% %.1f °/s, full %.1f °/s" % [
-		small, js.stick_rate(Vector2(0.6, 0.0)).x, full])
-	# A tap on the joystick never moves Dracula; holding it pauses him; release keeps the angle.
+	var sun := f.sun_rig
+	var near := func(a: Vector2, b: Vector2, tol: float) -> bool: return a.distance_to(b) <= tol
+	if not near.call(js.knob_center_global(), js.point_for_angles(sun.azimuth, sun.elevation), 2.0):
+		_fail("dial: knob is not on the sun's current angle")
+	# Mapping round trip and range limits on the ring.
+	var mid_el := (sun.elevation_min + sun.elevation_max) * 0.5
+	var mid_az := (sun.azimuth_min + sun.azimuth_max) * 0.5
+	for probe in [Vector2(-37.0, 22.0), Vector2(sun.azimuth_max, sun.elevation_max), Vector2(10.0, 58.0)]:
+		var back: Vector2 = js._ring_to_angles(js._angles_to_ring(probe.x, probe.y))
+		if back.distance_to(probe) > 0.05:
+			_fail("dial: mapping round trip %s → %s" % [str(probe), str(back)])
+	var r := js.ring.radius()
+	if not near.call(js._angles_to_ring(sun.azimuth_min, mid_el), Vector2(-r, 0.0), 0.5) \
+			or not near.call(js._angles_to_ring(mid_az, sun.elevation_max), Vector2(0.0, -r), 0.5):
+		_fail("dial: range limits are not on the ring's left edge / top")
+	# Drag: the sun goes where the finger points and stays after release; Dracula stays put.
 	var before := f.dracula.global_position
-	var c := js.knob_center_global()
-	if f.hud.is_in_play_view(c):
-		_fail("joystick area counts as play view (taps there would move Dracula)")
-	var az0 := f.sun_rig.azimuth
-	js.press_at(c)
-	js.move_to(c + Vector2(-js.knob_travel * 0.5, 0.0))   # gentle push toward smaller azimuth
-	await _physics_frames(12)
+	var start := Vector2(sun.azimuth, sun.elevation)
+	var aim := Vector2(start.x - 12.0, start.y + 4.0)
+	js.press_at(js.knob_center_global())
+	js.move_to(js.point_for_angles(aim.x, aim.y))
+	await _wait_settled(f)
+	js.release()
+	await _physics_frames(20)
+	if not near.call(Vector2(sun.azimuth, sun.elevation), aim, 0.3):
+		_fail("dial: sun at %.1f/%.1f, wanted %.1f/%.1f" % [sun.azimuth, sun.elevation, aim.x, aim.y])
+	if not near.call(js.knob_center_global(), js.point_for_angles(aim.x, aim.y), 2.0):
+		_fail("dial: knob did not stay on the new sun angle")
+	if f.dracula.global_position.distance_to(before) > 0.05:
+		_fail("dial: using the sun moved Dracula")
+	if f.hud.is_in_play_view(js.knob_center_global()):
+		_fail("dial area counts as play view (taps there would move Dracula)")
+	# Release keeps the target: let go at once, the sun still arrives there.
+	js.press_at(js.knob_center_global())
+	js.move_to(js.point_for_angles(start.x, start.y))
 	js.release()
 	await _wait_settled(f)
-	var az1 := f.sun_rig.azimuth
-	if is_equal_approx(az0, az1):
-		_fail("joystick: a push did not move the sun")
-	await _physics_frames(20)
-	if absf(f.sun_rig.azimuth - az1) > 0.01:
-		_fail("joystick: the sun kept moving after release")
-	if f.dracula.global_position.distance_to(before) > 0.05:
-		_fail("joystick: using the sun moved Dracula")
-	# Back to the level's start angle for the solver replay.
-	f._on_sun_drag_started()
-	f.sun_rig.set_target(f.level.sun_start_azimuth, f.level.sun_start_elevation)
+	if not near.call(Vector2(sun.azimuth, sun.elevation), start, 0.3):
+		_fail("dial: release did not keep the target (%.1f/%.1f)" % [sun.azimuth, sun.elevation])
+	# Keys move the sun and the knob follows.
+	var press := InputEventAction.new()
+	press.action = &"sun_left"
+	press.pressed = true
+	Input.parse_input_event(press)
+	await _physics_frames(4)
+	var release := InputEventAction.new()
+	release.action = &"sun_left"
+	release.pressed = false
+	Input.parse_input_event(release)
 	await _wait_settled(f)
-	f._on_sun_drag_ended()
+	if sun.azimuth >= start.x - 0.5 or not near.call(js.knob_center_global(), js.point_for_angles(sun.azimuth, sun.elevation), 2.0):
+		_fail("dial: Q key did not move the sun / knob (az %.1f)" % sun.azimuth)
+	# Guard: aim where Dracula would be exposed; the sun stops short, the knob stays on the
+	# safe angle, the dim marker shows the refused angle, the ring flashes.
+	var blocked := [false]
+	var cb := func() -> void: blocked[0] = true
+	sun.guard_blocked.connect(cb)
+	js.press_at(js.knob_center_global())
+	js.move_to(js.point_for_angles(sun.azimuth_max, start.y))
+	await _wait_settled(f)
+	var marker_shown: bool = js.target_marker.visible
+	var flash: float = js.blocked_rim.modulate.a
+	js.release()
+	sun.guard_blocked.disconnect(cb)
+	if not blocked[0] or sun.azimuth >= sun.azimuth_max - 0.5:
+		_fail("dial: guard did not stop the sun (az %.1f)" % sun.azimuth)
+	if not marker_shown or not near.call(js.knob_center_global(), js.point_for_angles(sun.azimuth, sun.elevation), 2.0):
+		_fail("dial: after a block the knob must sit on the safe angle and the marker on the refused one")
+	if f.sensor.exposure > 0.5:
+		_fail("dial: Dracula took exposure while the guard was active (%.1f)" % f.sensor.exposure)
+	_logger.info("Soak: dial OK — guard stopped the sun at az %.1f (flash %.2f), knob on the sun, marker on the aim" % [sun.azimuth, flash])
+	# Back to the level's start angle through the dial (moving back toward safety is allowed).
+	js.press_at(js.knob_center_global())
+	js.move_to(js.point_for_angles(f.level.sun_start_azimuth, f.level.sun_start_elevation))
+	await _wait_settled(f)
+	js.release()
 	await _wait_still(f)
-	_logger.info("Soak: joystick moved the sun %.1f° → %.1f° and it stayed there" % [az0, az1])
 
 ## Waits until Dracula stops moving; returns the peak exposure seen meanwhile.
 func _wait_still(f: ShadowRunFeature) -> float:

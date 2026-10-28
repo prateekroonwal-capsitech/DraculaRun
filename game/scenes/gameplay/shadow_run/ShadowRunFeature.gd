@@ -52,7 +52,7 @@ const SUN_MODE_KEY := "sun_control_mode"
 @export var default_sun_mode: SunInput.Mode = SunInput.Mode.JOYSTICK
 ## Camera distance behind Dracula per mode, so he sits in the lower-middle of the
 ## visible play view (joystick: view runs to the bottom; slider: view ends above the strip).
-@export var camera_distance_joystick: float = 3.6
+@export var camera_distance_joystick: float = 4.0
 @export var camera_distance_slider: float = 5.5
 
 @export_group("Intro")

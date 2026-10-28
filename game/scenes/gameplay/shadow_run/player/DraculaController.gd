@@ -7,6 +7,8 @@ extends PlayerController3D
 ## own where to go. Burn feedback and the sunlight death (flare → ash and bats) are
 ## driven from the exposure meter by the feature.
 ## Visual parts live in Dracula.tscn / BurnFX.tscn / DeathFX.tscn (assigned via exports).
+## The animated model is DraculaVisual.tscn (under Visual): each physics frame it gets his
+## real ground speed and blends Idle / Walk / Run; turning is done here (turn_speed_degrees).
 
 ## Reached the last point of the current path.
 signal arrived
@@ -25,11 +27,26 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 ## Seconds per hop, whatever its length (keeps hops quick at any speed).
 @export var hop_time: float = 0.3
 @export var hop_height: float = 0.55
-## Turn rate toward the travel direction, radians/s.
-@export var turn_speed: float = 22.0
+
+@export_group("Turning")
+## Max turn rate toward his path direction, degrees per second (no lean, no tilt).
+@export var turn_speed_degrees: float = 720.0
+## Direction changes bigger than this (degrees) are turned almost in place first,
+## so he never runs sideways or swings wide.
+@export_range(30.0, 180.0) var turn_in_place_angle: float = 100.0
+## ...and he sets off again once he faces within this many degrees of the path.
+@export_range(1.0, 90.0) var turn_in_place_release: float = 20.0
+## He faces a point this far ahead along the path (m): smooths the 8-way grid zigzag
+## and drag re-paths so his facing never jitters.
+@export var facing_lookahead: float = 0.8
+## Light smoothing of that facing target (1/s; higher = snappier).
+@export var facing_smoothing: float = 14.0
 
 @export_group("Scene parts")
+## Heading, hop, flinch and death transforms are applied to this node.
 @export var visual: Node3D
+## The animated model (child of `visual`).
+@export var body_visual: DraculaVisual
 @export var smoke: CPUParticles3D
 @export var embers: CPUParticles3D
 @export var flare_light: OmniLight3D
@@ -38,7 +55,7 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 ## Foot-level footprint the ShadowSensor ray-casts from (matches ShadeGrid's
 ## ground-point rule, so "standing on a shaded cell" = "not burning").
 @export var sample_points: Array[Node3D] = []
-## burn_rim.tres (next_pass of the body/head materials); its intensity is animated.
+## dracula_rim.tres (material_overlay on the model); its burn `intensity` is animated.
 @export var rim_material: ShaderMaterial
 
 @export_group("Burn feedback")
@@ -56,8 +73,6 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 @export var ash_linger_time: float = 0.4
 
 @export_group("Feel")
-@export var bob_height: float = 0.07
-@export var bob_cycles_per_meter: float = 0.9
 @export var no_cue_degrees: float = 22.0
 @export var flinch_degrees: float = 14.0
 
@@ -77,7 +92,7 @@ var _seg_from: Vector3
 var _seg_len: float = 0.0
 var _seg_travel: float = 0.0
 var _heading: float = 0.0
-var _bob_phase: float = 0.0
+var _turning_in_place: bool = false
 var _exposure: float = 0.0
 var _exposure_rising: bool = false
 var _sizzle_timer: float = 0.0
@@ -95,7 +110,7 @@ func inject_haptics(haptics: HapticsManager) -> void:
 	_haptics = haptics
 
 func _on_ready() -> void:
-	# burn_rim.tres is a shared resource that survives scene reloads: reset it.
+	# dracula_rim.tres is a shared resource that survives scene reloads: reset it.
 	rim_material.set_shader_parameter("intensity", 0.0)
 	flare_light.light_energy = 0.0
 
@@ -124,6 +139,7 @@ func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
 	visual.rotation.y = _heading
 	_points.clear()
 	_index = 0
+	body_visual.reset_to_idle()
 
 ## Follow `points` (world positions, first = the first cell to step into).
 ## hops[i] = true makes the step into points[i] a hop. `run` forces run speed
@@ -199,6 +215,7 @@ func play_burn_death() -> void:
 	_state = State.DYING
 	_points.clear()
 	_index = 0
+	body_visual.set_motion(0.0)
 	if _haptics:
 		_haptics.heavy()
 	if _audio and death_sting_sfx:
@@ -228,10 +245,23 @@ func _move(delta: float) -> void:
 	if _state != State.ACTIVE:
 		return
 	_update_burn_pulses(delta)
+	var prev_pos := global_position
+	_step_path(delta)
+	# Animation: real ground speed (0 while turning in place → Idle; hops keep Run playing).
+	var ground := Vector2(global_position.x - prev_pos.x, global_position.z - prev_pos.z).length() / maxf(delta, 0.0001)
+	if is_moving() and _hops[_index] and _seg_travel > 0.0:
+		ground = maxf(ground, run_speed)
+	body_visual.set_motion(ground)
+
+func _step_path(delta: float) -> void:
 	if not is_moving():
+		_turning_in_place = false
 		visual.position.y = lerpf(visual.position.y, 0.0, minf(1.0, delta * 12.0))
 		return
 	var hopping: bool = _hops[_index]
+	if _face_path(delta, hopping and _seg_travel > 0.0):
+		_cur_speed = 0.0   # turning almost in place before setting off
+		return
 	# Accelerate toward cruise speed; brake so he arrives at the last point, not past it.
 	var brake := sqrt(2.0 * acceleration * _remaining_distance())
 	_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 1.0))
@@ -241,15 +271,7 @@ func _move(delta: float) -> void:
 	var target := _points[_index]
 	var flat := _seg_from.lerp(target, t)
 	global_position = Vector3(flat.x, target.y, flat.z)
-	if hopping:
-		visual.position.y = sin(t * PI) * hop_height
-	else:
-		_bob_phase += speed * delta * bob_cycles_per_meter * TAU
-		visual.position.y = absf(sin(_bob_phase)) * bob_height
-	var d := target - _seg_from
-	if Vector2(d.x, d.z).length() > 0.01:
-		_heading = atan2(-d.x, -d.z)
-	visual.rotation.y = lerp_angle(visual.rotation.y, _heading, minf(1.0, turn_speed * delta))
+	visual.position.y = sin(t * PI) * hop_height if hopping else 0.0
 	if t >= 1.0:
 		_index += 1
 		if is_moving():
@@ -259,6 +281,46 @@ func _move(delta: float) -> void:
 			_index = 0
 			_cur_speed = 0.0
 			arrived.emit()
+
+## Turns toward the path direction at turn_speed_degrees. Returns true while he must hold
+## still to turn (a change bigger than turn_in_place_angle; never in mid-hop).
+func _face_path(delta: float, mid_hop: bool) -> bool:
+	var desired := _path_heading()
+	var err := absf(angle_difference(visual.rotation.y, desired))
+	if not mid_hop and err > deg_to_rad(turn_in_place_angle):
+		_turning_in_place = true
+	if _turning_in_place and (mid_hop or err < deg_to_rad(turn_in_place_release)):
+		_turning_in_place = false
+	if _turning_in_place:
+		_heading = desired
+	else:
+		_heading = lerp_angle(_heading, desired, 1.0 - exp(-facing_smoothing * delta))
+	visual.rotation.y = rotate_toward(visual.rotation.y, _heading, deg_to_rad(turn_speed_degrees) * delta)
+	return _turning_in_place
+
+## Facing target: the point facing_lookahead metres ahead along the remaining path
+## (never past a hop; during a hop, the landing point).
+func _path_heading() -> float:
+	var pos := global_position
+	var look := _points[_index]
+	if not _hops[_index]:
+		var left := facing_lookahead
+		var from := pos
+		for i in range(_index, _points.size()):
+			if i > _index and _hops[i]:
+				break
+			var p := _points[i]
+			var dd := Vector2(p.x - from.x, p.z - from.z).length()
+			if dd >= left:
+				look = from.lerp(p, left / dd)
+				break
+			left -= dd
+			from = p
+			look = p
+	var d := look - pos
+	if Vector2(d.x, d.z).length() < 0.05:
+		return _heading
+	return atan2(-d.x, -d.z)
 
 func _remaining_distance() -> float:
 	var d := _seg_len - _seg_travel

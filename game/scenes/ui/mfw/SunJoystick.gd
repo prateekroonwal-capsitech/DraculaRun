@@ -1,83 +1,90 @@
 class_name SunJoystick
 extends SunInput
 
-## SunJoystick — rate-based sun control in the bottom-right corner (bottom-left with
-## left_handed). SunInput "joystick" mode; the slider strip is the other mode. Push the sun knob: X turns the sun's AZIMUTH, Y its ELEVATION
-## (up = higher sun / shorter shadows). Deflection sets the turning SPEED through a
-## response curve — a small push is a slow, precise nudge, a full push is max_speed.
-## Inside the deadzone nothing moves. On release the knob springs back to the centre and
-## the sun stays exactly where it is. Q/E (azimuth) and R/F (elevation) do the same on desktop.
+## SunJoystick — the sun-position DIAL in the bottom-right corner (bottom-left with
+## left_handed). SunInput "joystick" mode; the slider strip is the other mode.
 ##
-## Touch arbitration: a touch that STARTS on the joystick belongs to the sun until it lifts
+## The bright sun knob always sits at the sun's CURRENT angle:
+##   knob X = azimuth (left edge of the ring = the level's minimum, right edge = maximum),
+##   knob Y = elevation (top = HIGH / short shadows, bottom = LOW / long shadows).
+## The level's (azimuth, elevation) rectangle is mapped onto the round dial with an
+## elliptical square↔disc mapping, so every point inside the ring is a valid angle and
+## the edge midpoints are the range limits.
+##
+## Touch / drag anywhere inside the ring = "put the sun there": that angle becomes the
+## SunRig target and the sun turns toward it at the rig's max speed and smoothing. While
+## it catches up, a dim marker shows where the finger is aiming. Releasing leaves the
+## target where it was left (no spring-back). Q/E and R/F nudge the target; the knob follows.
+## Exposure guard: the rig stops the sun at the last safe angle — the knob stays there, the
+## ring flashes red and the dim marker lingers on the angle the player tried to reach.
+##
+## Touch arbitration: a touch that STARTS on the dial belongs to the sun until it lifts
 ## (consumed in _input(), so the play view never sees it); every other touch is free for
-## tap / drag movement — multi-touch works (one finger on the sun, one leading Dracula).
-## drag_started / drag_ended bracket every sun interaction: Dracula stands still meanwhile.
-## When the SunRig's exposure guard refuses a move, play_blocked() flashes the base red.
-## The joystick only moves the SunRig *target*; the rig enforces range, speed and the guard.
-## Visuals (base, rim, knob) are nodes in SunJoystick.tscn.
+## tap / drag movement — multi-touch works. drag_started / drag_ended bracket every sun
+## interaction: Dracula stands still meanwhile.
 
 @export_group("Feel")
-## Max sun speed at full deflection, degrees per second (both axes).
-@export var max_speed: float = 180.0
-## Fraction of the knob travel that does nothing.
-@export_range(0.0, 0.5) var deadzone: float = 0.1
-## Response curve exponent: speed = max_speed × ((deflection − deadzone) / (1 − deadzone))^exponent.
-## 1 = linear, 2 = gentle near the centre (precise), 3 = very gentle.
-@export_range(1.0, 4.0) var response_exponent: float = 2.2
-## How far the knob centre can travel from the base centre, px.
-@export var knob_travel: float = 92.0
-## The target never leads the visible sun by more than this (°), so letting go never overshoots.
-@export var max_lead_degrees: float = 6.0
-## Spring-back time of the knob on release.
-@export var return_time: float = 0.12
 ## Q/E and R/F speeds in °/s.
 @export var key_azimuth_speed: float = 180.0
 @export var key_elevation_speed: float = 180.0
+## How long the dim "tried here" marker stays after a blocked move, seconds.
+@export var blocked_marker_time: float = 0.8
 
 @export_group("Layout")
 ## Mirror to the bottom-left corner.
 @export var left_handed: bool = false
-## Distance from the safe-area edges, px (the joystick is anchored to a bottom corner).
-@export var corner_margin: float = 48.0
-## Touches up to this far outside the base circle (px) still grab the joystick.
-@export var grab_slop: float = 24.0
+## Distance from the safe-area edges, px (the dial is anchored to a bottom corner).
+@export var corner_margin: float = 24.0
+## Touches up to this far outside the ring (px) still grab the dial.
+@export var grab_slop: float = 28.0
 
 @export_group("Blocked feedback")
-@export var shake_pixels: float = 12.0
+@export var shake_pixels: float = 10.0
 @export var shake_time: float = 0.3
 
 @export_group("Parts")
-## Holds base, rim and knob; shaken on a blocked move (the root keeps its anchors).
+## Holds ring, labels, knob and marker; shaken on a blocked move (the root keeps its anchors).
 @export var body: Control
+@export var ring: DialRing
 @export var knob: Control
+@export var target_marker: Control
 @export var blocked_rim: Control
 
 var _enabled: bool = true
 var _touch: int = -99          # owning touch index (-1 = mouse), -99 = none
 var _key_dragging: bool = false
-var _knob_offset: Vector2 = Vector2.ZERO
-var _knob_tween: Tween
+var _aim: Vector2 = Vector2.ZERO          # last finger aim, dial-local px from the ring centre
+var _aim_visible_until: float = 0.0
+var _clock: float = 0.0
 var _fx_tween: Tween
+
+func bind_sun(sun: SunRig) -> void:
+	if _sun and _sun.sun_moved.is_connected(_on_sun_moved):
+		_sun.sun_moved.disconnect(_on_sun_moved)
+	super.bind_sun(sun)
+	if _sun:
+		_sun.sun_moved.connect(_on_sun_moved)
+	_place_parts()
 
 func set_controls_enabled(enabled: bool) -> void:
 	_enabled = enabled
 	if not enabled and is_dragging():
 		_touch = -99
 		_key_dragging = false
-		_release_knob()
 		drag_ended.emit()
-	set_process(is_dragging())
 	set_process_input(enabled)
 
 func is_dragging() -> bool:
 	return _touch != -99 or _key_dragging
 
-## True when a viewport position is on the joystick (incl. grab slop).
+## True when a viewport position is on the dial (ring + grab slop).
 func contains(viewport_pos: Vector2) -> bool:
-	return is_visible_in_tree() and _to_local(viewport_pos).distance_to(size * 0.5) <= size.x * 0.5 + grab_slop
+	return is_visible_in_tree() and _to_ring(viewport_pos).length() <= ring.radius() + grab_slop
 
-## The guard refused a sun move: red rim flash + small shake (not restarted while running).
+## The guard refused a sun move: red ring flash + small shake; the aim marker lingers.
 func play_blocked() -> void:
+	_aim_visible_until = _clock + blocked_marker_time
+	set_process(true)
 	if _fx_tween and _fx_tween.is_valid():
 		return
 	_fx_tween = create_tween()
@@ -90,12 +97,15 @@ func _on_ready() -> void:
 		offset_left = corner_margin
 		offset_right = corner_margin + custom_minimum_size.x
 	blocked_rim.modulate.a = 0.0
-	_center_knob()
-	set_process(false)   # PDF §4: tick only while the knob is held or a sun key is down
+	target_marker.visible = false
+	ring.resized.connect(_place_parts)
+	_place_parts()
+	set_process(false)   # PDF §4: tick only while a key is held or the aim marker is shown
 	set_process_input(true)
 
 func _exit_tree() -> void:
-	_sun = null
+	if _sun and _sun.sun_moved.is_connected(_on_sun_moved):
+		_sun.sun_moved.disconnect(_on_sun_moved)
 
 # ── Input ─────────────────────────────────────────────────────────────────
 
@@ -122,7 +132,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
 		if sd.index == _touch:
-			_move_knob(sd.position)
+			_aim_at(sd.position)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
@@ -131,103 +141,127 @@ func _input(event: InputEvent) -> void:
 		elif not mb.pressed and _touch == -1:
 			_let_go()
 	elif event is InputEventMouseMotion and _touch == -1:
-		_move_knob((event as InputEventMouseMotion).position)
+		_aim_at((event as InputEventMouseMotion).position)
 		get_viewport().set_input_as_handled()
 
 ## Test hooks: the same grab / move / release path a finger takes.
 func press_at(viewport_pos: Vector2) -> void:
-	if _touch == -99 and contains(viewport_pos):
+	if _enabled and _sun and _touch == -99 and contains(viewport_pos):
 		_grab(-1, viewport_pos)
 
 func move_to(viewport_pos: Vector2) -> void:
 	if _touch != -99:
-		_move_knob(viewport_pos)
+		_aim_at(viewport_pos)
 
 func release() -> void:
 	if _touch != -99:
 		_let_go()
 
+## Viewport position of the dial point for an angle (for tests and tutorials).
+func point_for_angles(azimuth: float, elevation: float) -> Vector2:
+	return ring.get_global_transform_with_canvas() * (ring.size * 0.5 + _angles_to_ring(azimuth, elevation))
+
+## Viewport position of the bright knob (the sun's current angle).
 func knob_center_global() -> Vector2:
-	return get_global_transform_with_canvas() * (size * 0.5)
+	return knob.get_global_transform_with_canvas() * (knob.size * 0.5)
 
 func _grab(index: int, viewport_pos: Vector2) -> void:
 	var first := not is_dragging()
 	_touch = index
 	get_viewport().set_input_as_handled()
-	if _knob_tween and _knob_tween.is_valid():
-		_knob_tween.kill()
-	_move_knob(viewport_pos)
-	set_process(true)
 	if first:
 		drag_started.emit()
+	_aim_at(viewport_pos)
 
 func _let_go() -> void:
 	_touch = -99
 	get_viewport().set_input_as_handled()
-	_release_knob()
+	_place_parts()
 	if not _key_dragging:
 		drag_ended.emit()
 
-func _move_knob(viewport_pos: Vector2) -> void:
-	_knob_offset = (_to_local(viewport_pos) - size * 0.5).limit_length(knob_travel)
-	_place_knob()
+## Finger → target angle (absolute: the sun goes where the finger points).
+func _aim_at(viewport_pos: Vector2) -> void:
+	var r := ring.radius()
+	_aim = _to_ring(viewport_pos).limit_length(r)
+	var a := _ring_to_angles(_aim)
+	_sun.set_target(a.x, a.y)
+	set_process(true)
+	_place_parts()
 
-func _release_knob() -> void:
-	# The sun stays where it is: drop any lead the target had over the visible sun.
-	if _sun:
-		_sun.set_target(_sun.azimuth, _sun.elevation)
-	if _knob_tween and _knob_tween.is_valid():
-		_knob_tween.kill()
-	_knob_tween = create_tween()
-	_knob_tween.tween_method(func(o: Vector2) -> void:
-		_knob_offset = o
-		_place_knob(), _knob_offset, Vector2.ZERO, return_time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-# ── Rate control ──────────────────────────────────────────────────────────
+# ── Keys / marker timing ──────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
+	_clock += delta
 	if _sun == null:
 		set_process(false)
 		return
-	var rate := stick_rate(_knob_offset / knob_travel) if _touch != -99 else Vector2.ZERO
-	rate += Vector2(Input.get_axis("sun_left", "sun_right") * key_azimuth_speed,
-		Input.get_axis("sun_down", "sun_up") * key_elevation_speed)
-	if _key_dragging and is_zero_approx(Input.get_axis("sun_left", "sun_right")) and is_zero_approx(Input.get_axis("sun_down", "sun_up")):
+	var d_az := Input.get_axis("sun_left", "sun_right") * key_azimuth_speed * delta
+	var d_el := Input.get_axis("sun_down", "sun_up") * key_elevation_speed * delta
+	if _key_dragging and is_zero_approx(d_az) and is_zero_approx(d_el):
 		_key_dragging = false
 		if _touch == -99:
-			_sun.set_target(_sun.azimuth, _sun.elevation)
 			drag_ended.emit()
-	if not is_dragging():
-		set_process(false)
-		return
-	if rate == Vector2.ZERO:
-		return
-	var az := clampf(_sun.target_azimuth + rate.x * delta, _sun.azimuth - max_lead_degrees, _sun.azimuth + max_lead_degrees)
-	var el := clampf(_sun.target_elevation + rate.y * delta, _sun.elevation - max_lead_degrees, _sun.elevation + max_lead_degrees)
-	_sun.set_target(az, el)
+	if _key_dragging:
+		_sun.nudge_target(d_az, d_el)
+	_place_parts()
+	if not is_dragging() and _clock >= _aim_visible_until and _sun.is_settled():
+		set_process(false)   # PDF §4: nothing left to animate
 
-## Sun speed (°/s, x = azimuth, y = elevation) for a knob deflection in [-1, 1]²
-## (screen axes: +y = down). Public so tests can check the curve.
-func stick_rate(v: Vector2) -> Vector2:
-	var m := minf(1.0, v.length())
-	if m <= deadzone:
+func _on_sun_moved(_az: float, _el: float) -> void:
+	_place_parts()
+
+# ── Mapping: (azimuth, elevation) square ↔ dial disc ─────────────────────
+
+## Angles → dial offset from the ring centre (px, screen axes: +y down).
+func _angles_to_ring(azimuth: float, elevation: float) -> Vector2:
+	if _sun == null:
 		return Vector2.ZERO
-	var k := pow((m - deadzone) / (1.0 - deadzone), response_exponent)
-	var dir := v / v.length()
-	return Vector2(dir.x, -dir.y) * max_speed * k
+	var x := remap(azimuth, _sun.azimuth_min, _sun.azimuth_max, -1.0, 1.0)
+	var y := remap(elevation, _sun.elevation_min, _sun.elevation_max, -1.0, 1.0)   # +1 = HIGH
+	x = clampf(x, -1.0, 1.0)
+	y = clampf(y, -1.0, 1.0)
+	# Elliptical grid mapping square → disc.
+	var u := x * sqrt(1.0 - y * y * 0.5)
+	var v := y * sqrt(1.0 - x * x * 0.5)
+	return Vector2(u, -v) * ring.radius()
+
+## Dial offset (px from the ring centre, clamped inside the ring) → (azimuth, elevation).
+func _ring_to_angles(p: Vector2) -> Vector2:
+	var r := maxf(1.0, ring.radius())
+	var u := clampf(p.x / r, -1.0, 1.0)
+	var v := clampf(-p.y / r, -1.0, 1.0)
+	var n := Vector2(u, v)
+	if n.length() > 1.0:
+		n = n.normalized()
+	u = n.x
+	v = n.y
+	# Inverse elliptical grid mapping disc → square.
+	var s2 := 2.0 * sqrt(2.0)
+	var uu := u * u
+	var vv := v * v
+	var x := 0.5 * sqrt(maxf(0.0, 2.0 + uu - vv + s2 * u)) - 0.5 * sqrt(maxf(0.0, 2.0 + uu - vv - s2 * u))
+	var y := 0.5 * sqrt(maxf(0.0, 2.0 - uu + vv + s2 * v)) - 0.5 * sqrt(maxf(0.0, 2.0 - uu + vv - s2 * v))
+	return Vector2(remap(clampf(x, -1.0, 1.0), -1.0, 1.0, _sun.azimuth_min, _sun.azimuth_max),
+		remap(clampf(y, -1.0, 1.0), -1.0, 1.0, _sun.elevation_min, _sun.elevation_max))
 
 # ── Visuals ───────────────────────────────────────────────────────────────
 
-func _center_knob() -> void:
-	_knob_offset = Vector2.ZERO
-	_place_knob()
-
-func _place_knob() -> void:
-	knob.position = size * 0.5 - knob.size * 0.5 + _knob_offset
+func _place_parts() -> void:
+	if knob == null or ring == null or _sun == null:
+		return
+	var c := ring.position + ring.size * 0.5
+	knob.position = c + _angles_to_ring(_sun.azimuth, _sun.elevation) - knob.size * 0.5
+	# Dim marker: where the finger aims while the sun catches up (or a refused angle).
+	var aiming := _touch != -99 or _clock < _aim_visible_until
+	var aim_pos := c + _aim - target_marker.size * 0.5
+	target_marker.position = aim_pos
+	target_marker.visible = aiming and aim_pos.distance_to(knob.position + (knob.size - target_marker.size) * 0.5) > 6.0
 
 func _set_fx(k: float) -> void:
 	blocked_rim.modulate.a = k
 	body.position = Vector2(sin(k * 40.0) * shake_pixels * k, 0.0)
 
-func _to_local(viewport_pos: Vector2) -> Vector2:
-	return get_global_transform_with_canvas().affine_inverse() * viewport_pos
+## Viewport position → offset from the ring centre in dial-local px.
+func _to_ring(viewport_pos: Vector2) -> Vector2:
+	return ring.get_global_transform_with_canvas().affine_inverse() * viewport_pos - ring.size * 0.5

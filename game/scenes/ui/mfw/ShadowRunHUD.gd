@@ -6,7 +6,7 @@ extends UIController
 ##   * joystick mode: the play view runs to the bottom edge, SunJoystick floats bottom-right;
 ##   * slider mode: the SunControl strip takes the bottom ~15%, the play view ends above it.
 ## set_sun_mode() switches instantly; ShadowRunFeature picks the mode (saved setting). Layout is containers + stretch ratios in ShadowRunHUD.tscn; this script
-## pads the SafeArea container by the device's safe-area insets (notch / home indicator).
+## The SafeArea node is a SafeAreaMargin (ui/common): notch / gesture-bar insets + padding.
 ## Listens to GameBus for exposure (drives the burn vignette only); everything else is called directly by ShadowRunFeature.
 ## All non-button controls use MOUSE_FILTER_IGNORE so desktop clicks reach the feature.
 
@@ -16,10 +16,6 @@ signal debug_toggle_requested
 signal sun_drag_started
 signal sun_drag_ended
 
-## MarginContainer padded with the display safe area (mobile only).
-@export var safe_area: MarginContainer
-## Minimum padding in viewport pixels, even on devices without insets.
-@export var min_safe_margin: int = 0
 ## Show the faint "dbg" button (toggles the F3 overlay). Only ever shown in debug builds.
 @export var show_debug_button: bool = false
 ## Play view stretch ratio per sun mode (top bar 10, strip 15).
@@ -51,8 +47,6 @@ func inject_services(registry: Node) -> void:
 		_bus.sun_exposure_changed.connect(_on_exposure_changed)
 
 func _on_ready() -> void:
-	get_viewport().size_changed.connect(_apply_safe_area)
-	_apply_safe_area()
 	_pause_button.pressed.connect(func() -> void: pause_requested.emit())
 	_debug_button.pressed.connect(func() -> void: debug_toggle_requested.emit())
 	_debug_button.visible = show_debug_button and OS.is_debug_build()
@@ -65,8 +59,6 @@ func _on_ready() -> void:
 	_on_exposure_changed(0.0)
 
 func _exit_tree() -> void:
-	if get_viewport().size_changed.is_connected(_apply_safe_area):
-		get_viewport().size_changed.disconnect(_apply_safe_area)
 	if _bus and _bus.sun_exposure_changed.is_connected(_on_exposure_changed):
 		_bus.sun_exposure_changed.disconnect(_on_exposure_changed)
 
@@ -133,27 +125,6 @@ func show_hint(text: String, seconds: float = 3.5) -> void:
 	_hint_tween.tween_property(_hint, "modulate:a", 1.0, 0.25)
 	_hint_tween.tween_interval(seconds)
 	_hint_tween.tween_property(_hint, "modulate:a", 0.0, 0.4)
-
-## Converts DisplayServer's safe area (window pixels) into viewport-space margins.
-## Desktop windows have no insets, so only mobile reads the display safe area.
-func _apply_safe_area() -> void:
-	var left := min_safe_margin
-	var top := min_safe_margin
-	var right := min_safe_margin
-	var bottom := min_safe_margin
-	if PlatformUtils.is_mobile():
-		var win := Vector2(DisplayServer.window_get_size())
-		var safe := Rect2(DisplayServer.get_display_safe_area())
-		if win.x > 0.0 and win.y > 0.0 and safe.size.x > 0.0:
-			var to_view := get_viewport_rect().size / win
-			left = maxi(left, int(safe.position.x * to_view.x))
-			top = maxi(top, int(safe.position.y * to_view.y))
-			right = maxi(right, int((win.x - safe.end.x) * to_view.x))
-			bottom = maxi(bottom, int((win.y - safe.end.y) * to_view.y))
-	safe_area.add_theme_constant_override("margin_left", left)
-	safe_area.add_theme_constant_override("margin_top", top)
-	safe_area.add_theme_constant_override("margin_right", right)
-	safe_area.add_theme_constant_override("margin_bottom", bottom)
 
 func _on_exposure_changed(value: float) -> void:
 	if not is_node_ready():

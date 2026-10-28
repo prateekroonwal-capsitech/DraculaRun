@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/Dracula/dracula.glb" id="1_glb"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.gd" id="2_vis"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_rim.tres" id="3_rim"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula_eye.tres" id="4_eye"]
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_idle"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_walk"]
+animation = &"Walk"
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_run"]
+animation = &"Run"
+
+[sub_resource type="AnimationNodeBlendSpace1D" id="Blend_locomotion"]
+blend_point_0/node = SubResource("Anim_idle")
+blend_point_0/pos = 0.0
+blend_point_1/node = SubResource("Anim_walk")
+blend_point_1/pos = 1.44
+blend_point_2/node = SubResource("Anim_run")
+blend_point_2/pos = 4.24
+min_space = 0.0
+max_space = 4.24
+snap = 0.01
+value_label = "speed (m/s)"
+sync = true
+
+[sub_resource type="AnimationNodeTimeScale" id="Scale_speed"]
+
+[sub_resource type="AnimationNodeBlendTree" id="Tree_root"]
+nodes/Locomotion/node = SubResource("Blend_locomotion")
+nodes/Locomotion/position = Vector2(0, 120)
+nodes/Speed/node = SubResource("Scale_speed")
+nodes/Speed/position = Vector2(260, 120)
+nodes/output/position = Vector2(480, 120)
+node_connections = [&"Speed", 0, &"Locomotion", &"output", 0, &"Speed"]
+
+[node name="DraculaVisual" node_paths=PackedStringArray("animation_tree") instance=ExtResource("1_glb")]
+editor_description = "Inherited scene of Dracula/dracula.glb (don't edit the .glb). Rotated 180° on Y: the model faces +Z, the game's forward is −Z. Feel: walk/run clip speeds and blend time on this root; graph in AnimationTree. Rim: material_overlay on DraculaMesh (dracula_rim.tres)."
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+script = ExtResource("2_vis")
+animation_tree = NodePath("AnimationTree")
+
+[node name="DraculaMesh" parent="Armature/Skeleton3D" index="0"]
+material_overlay = ExtResource("3_rim")
+surface_material_override/8 = ExtResource("4_eye")
+
+[node name="AnimationTree" type="AnimationTree" parent="." index="2"]
+editor_description = "Locomotion (BlendSpace1D Idle 0 / Walk 1.44 / Run 4.24 m/s) → Speed (TimeScale, anti foot-slide) → output. Driven by DraculaVisual.gd."
+tree_root = SubResource("Tree_root")
+anim_player = NodePath("../AnimationPlayer")
+parameters/Locomotion/blend_position = 0.0
+parameters/Speed/scale = 1.0

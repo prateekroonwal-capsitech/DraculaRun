@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunJoystick.tscn" id="3_sun"]
 [ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunControl.tscn" id="5_strip"]
 [ext_resource type="Shader" path="res://game/assets/shaders/burn_vignette.gdshader" id="4_vig"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/common/SafeAreaMargin.tscn" id="6_safe"]
 
 [sub_resource type="ShaderMaterial" id="Mat_vignette"]
 resource_local_to_scene = true
@@ -24,7 +25,7 @@ corner_radius_top_right = 18
 corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 
-[node name="ShadowRunHUD" type="Control" node_paths=PackedStringArray("safe_area")]
+[node name="ShadowRunHUD" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -33,7 +34,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
-safe_area = NodePath("SafeArea")
 
 [node name="BurnVignette" type="ColorRect" parent="."]
 unique_name_in_owner = true
@@ -46,14 +46,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="SafeArea" type="MarginContainer" parent="."]
+[node name="SafeArea" parent="." instance=ExtResource("6_safe")]
+editor_description = "SafeAreaMargin: everything interactive (top bar, pause, sun dial, slider) sits inside, clear of notches / gesture bars. Tune min_* padding and simulate_insets_* here. The 3D level stays full-screen behind the HUD."
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
 
 [node name="Layout" type="VBoxContainer" parent="SafeArea"]
 layout_mode = 2
