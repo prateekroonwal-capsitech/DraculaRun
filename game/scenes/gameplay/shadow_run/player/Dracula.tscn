@@ -7,7 +7,7 @@
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.tscn" id="6_visual"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/BurnFX.tscn" id="11_burn"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DeathFX.tscn" id="12_death"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula_rim.tres" id="13_rim"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="13_rim"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]
 radius = 0.3

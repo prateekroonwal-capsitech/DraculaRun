@@ -69,6 +69,8 @@ toggle_debug_overlay={
 
 [layer_names]
 
+3d_render/layer_1="World"
+3d_render/layer_2="Character"
 3d_physics/layer_1="ground"
 3d_physics/layer_2="player"
 3d_physics/layer_3="obstacle"

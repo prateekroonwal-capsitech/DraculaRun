@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="1_rim"]
+
+[resource]
+resource_name = "Lining"
+next_pass = ExtResource("1_rim")
+cull_mode = 2
+albedo_color = Color(0.7216, 0.1529, 0.2078, 1)
+roughness = 0.45

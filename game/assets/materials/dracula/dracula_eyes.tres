@@ -1,0 +1,12 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="1_rim"]
+
+[resource]
+resource_name = "Eyes"
+next_pass = ExtResource("1_rim")
+albedo_color = Color(1, 0.3804, 0.2706, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(1, 0.3137, 0.2196, 1)
+emission_energy_multiplier = 2.6

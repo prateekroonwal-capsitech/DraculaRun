@@ -64,8 +64,8 @@ normal flow), and is the only place in gameplay code that touches `ServiceRegist
 | Action | Touch | Desktop |
 |---|---|---|
 | Move Dracula | **Tap** a spot, or **press and drag** to lead him | Click / click-drag |
-| Turn the sun (azimuth) | **Joystick** (default): push the sun knob left / right. **Slider**: drag horizontally in the bottom strip | Q / E (both modes) |
-| Raise / lower the sun (elevation) | **Joystick**: push up = higher sun, short shadows. **Slider**: drag vertically in the strip | R / F (both modes) |
+| Turn the sun (azimuth) | **Dial** (default): drag the sun knob left / right inside the ring. **Slider**: drag horizontally in the bottom strip | Q / E (both modes) |
+| Raise / lower the sun (elevation) | **Dial**: up = HIGH (short shadows), down = LOW. **Slider**: drag vertically in the strip | R / F (both modes) |
 | Switch sun control | Pause → **Sun control: Joystick / Slider** (saved) | Same |
 | Pause | ‖ button (top-left) | Esc or P |
 | Debug overlay | Optional "dbg" button (off by default) | F3 (debug builds only) |
@@ -110,15 +110,22 @@ ranges (per level), the 180°/s cap, smoothing, the guard and shade-grid syncing
 identical. Exactly one is shown; the Pause panel switch swaps them instantly and saves
 `sun_control_mode` (see *Saved setting*).
 
-- **Joystick (rate control).** Knob deflection sets the turning *speed*:
-  `speed = max_speed × ((d − deadzone) / (1 − deadzone))^response_exponent`, with
-  `max_speed` 180°/s, `deadzone` 0.1, `response_exponent` 2.2 (a 30% push turns about
-  5°/s for fine work, full push 180°/s). X = azimuth, up = higher sun. Releasing springs
-  the knob back and the sun stops where it is (the target never leads the sun by more
-  than `max_lead_degrees`, 6°). The base is 260 px; `left_handed` mirrors it bottom-left.
-- **Slider (position control).** Relative drag in the bottom strip: horizontal = azimuth,
-  vertical = elevation, sensitivity 1.5×; the guide arc stays fixed and the sun icon
-  rises above it for a high sun.
+- **Dial ("joystick" mode, position control).** A thin golden ring (264 px) with ticks,
+  HIGH above and LOW below, and a dashed inner circle. The bright sun knob always sits at
+  the sun's **current** angle: knob X = azimuth (ring's left edge = the level's minimum,
+  right edge = maximum), knob Y = elevation (top = HIGH). The angle rectangle maps onto
+  the disc with an elliptical square↔disc mapping, so every point inside the ring is a
+  valid angle. Touching or dragging anywhere in the ring sets that angle as the target;
+  the sun turns toward it at the rig's 180°/s and smoothing, and a dim marker shows where
+  the finger is aiming meanwhile. Releasing keeps the target (no spring-back), and the
+  knob starts at the level's start angle. If the guard refuses an angle, the sun and knob
+  stop at the last safe angle, the ring flashes red, and the dim marker lingers
+  (`blocked_marker_time`, 0.8 s) on the refused angle. `left_handed` mirrors the dial to
+  the bottom-left.
+- **Slider (relative position control).** Drag in the bottom strip: horizontal = azimuth,
+  vertical = elevation, sensitivity 1.5×. It also always shows the current angle: the sun
+  icon sits at the current azimuth along the fixed arc and rises above it for a high sun
+  (a dim ring marks the target while the sun catches up), consistent with the dial.
 
 While the sun is moving, by either control or the keys, Dracula stops at the next cell
 and stands still.
@@ -141,6 +148,37 @@ ignores all input, keys included.
 `"slider"`) from the injected `SaveManager` at level start (`get_value`, default
 `default_sun_mode` = joystick), and the Pause switch writes it with `set_value` +
 `save_game()`, so it carries across levels and restarts.
+
+## Dracula (model, animation, visibility)
+
+- **Model:** `player/Dracula/dracula.glb` (1.95 m, 26 bones, cloak motion baked into the
+  clips). `player/DraculaVisual.tscn` is an inherited scene of it, rotated 180° on Y (the
+  model faces +Z, the game's forward is −Z) and placed under `Dracula/Visual`.
+- **Clips:** only `Idle`, `Walk` and `Run` are imported, all looping (Linear). The `.glb`'s
+  Import Script, `player/Dracula/dracula_import.gd`, keeps just those three, because
+  Godot's per-animation import options have no skip switch.
+- **AnimationTree:** `Locomotion` (BlendSpace1D on real ground speed: Idle 0, Walk 1.44,
+  Run 4.24 m/s, the speeds the clips were authored for, measured from the planted foot)
+  → `Speed` (TimeScale = speed ÷ blended clip speed above the Walk point, so the feet don't
+  slide; Run plays at 1.9× at 8 m/s) → output. `DraculaVisual.gd` smooths the speed with
+  `locomotion_blend_time` (0.2 s), so stopping eases into Idle. Turning in place, sun
+  adjustments and standing still all read 0 m/s, which is Idle. Hops keep Run playing.
+- **Turning** (`DraculaController`, group *Turning*): he faces a point `facing_lookahead`
+  (0.8 m) ahead on his path, lightly smoothed (`facing_smoothing` 14/s), turning at up to
+  `turn_speed_degrees` (720°/s) with no lean or tilt. If the path direction is more than
+  `turn_in_place_angle` (100°) from his facing, he stops and turns first, then sets off
+  once within `turn_in_place_release` (20°).
+- **Colours:** each of the 13 surfaces uses a duplicate of its `.glb` material in
+  `game/assets/materials/dracula/` (same albedo, roughness and metallic; the eyes and ruby
+  have their emission boosted to 2.6 and 2.0). Effects are added only via `next_pass`:
+  surface → `dracula_rim.tres` (fresnel rim + burn glow) → `dracula_outline.tres`
+  (screen-space inverted hull). There's no `material_override` and no `material_overlay`.
+- **Readable in shade without lightening shade:** his mesh is on render layer 2
+  ("Character"). `CharacterLight` (in `DraculaVisual.tscn`) is a shadowless
+  DirectionalLight with **cull mask = Character only**, pointing from the camera side.
+  A capture with this light on vs off differs only inside Dracula's own silhouette
+  (a 109 × 112 px box at 1080 width); every ground and shadow pixel is identical. In
+  sunlight he gets the normal sun light plus the burn effects.
 
 ## Failure
 
@@ -287,11 +325,18 @@ width is visible but less depth ahead.
 
 1. **Top bar, 10%:** pause, level label (no exposure bar; exposure only drives the burn vignette).
 2. **Play view:** taps and drags happen here; nothing covers it except transient labels
-   and, in joystick mode, the joystick. Joystick mode: 90%, down to the bottom edge
-   (camera `distance` 3.6 m). Slider mode: 75%, ending above the strip (camera 5.5 m).
-   Either way Dracula sits in the lower-middle of the visible play view.
-3. **Joystick mode:** 260 px `SunJoystick` floating 48 px in from the bottom-right safe
-   corner. **Slider mode:** the `SunControl` strip, bottom 15%.
+   and, in dial mode, the dial. Dial mode: 90%, down to the bottom edge (camera
+   `distance` 4.0 m). Slider mode: 75%, ending above the strip (camera 5.5 m). Either way
+   Dracula sits in the lower-middle of the visible play view, above the controls.
+3. **Dial mode:** `SunJoystick` (290 × 356 px including the HIGH/LOW labels), 24 px in
+   from the bottom-right corner of the safe area. **Slider mode:** the `SunControl`
+   strip, bottom 15% of the safe area.
+
+Everything interactive sits inside `SafeArea` (`ui/common/SafeAreaMargin.tscn`): the
+system insets (notch, gesture bar), converted to canvas px and updated on every size
+change, **plus** minimum padding (16 top, 32 bottom, 24 sides), so nothing is ever flush
+with the screen edge, even on phones that report zero insets. The 3D level stays
+full-screen behind it.
 
 ## Debug overlay (F3, off by default)
 
@@ -310,11 +355,13 @@ Rendered shadows and green/blue cells must coincide; captures confirmed they do.
 | `LevelNN` root (`ShadowLevel`) | `sun_start_azimuth`, `sun_start_elevation`, `azimuth_min` / `azimuth_max` (−80/80), `elevation_min` / `elevation_max` (15/65), `hint`, `next_level` |
 | `LevelNN/ShadeGrid` | `size`, `cell_size`, `sample_height`, `max_hop_distance`, `hop_penalty`, `solid_probe_heights`, `mask_samples`, `mask_elevation_samples`, `rays_per_frame`, `settle_rays_per_frame`, `max_updates_per_second` |
 | `Game/SunRig` (`sun/SunRig.tscn`) | `max_azimuth_speed` / `max_elevation_speed` (180 °/s), `smoothing` (22), `min_follow_speed` (60), `settle_threshold`, `guard_search_steps`, sun colour and energy; light shadow settings |
-| `Game/HUDLayer/…/SunJoystick` (`ui/mfw/SunJoystick.tscn`) | `max_speed` 180 °/s, `deadzone` 0.1, `response_exponent` 2.2, `knob_travel` 92 px, `max_lead_degrees` 6, `return_time`, key speeds 180 °/s, `left_handed`, `corner_margin` 48, `grab_slop` 24; size 260 px (`custom_minimum_size` + offsets); look in the StyleBoxes |
+| `Game/HUDLayer/…/SunJoystick` (`ui/mfw/SunJoystick.tscn`, the dial) | key speeds 180 °/s, `blocked_marker_time` 0.8 s, `left_handed`, `corner_margin` 24, `grab_slop` 28, shake; ring look on `Body/Ring` (`DialRing`: `ring_color`, `ring_width`, `tick_length`, `inner_fraction`, `inner_dashes`, `backdrop_color`); knob / marker / red rim in their StyleBoxes |
 | `Game/HUDLayer/…/SunControl` (slider strip) | strip height via its `size_flags_stretch_ratio` (15), `drag_sensitivity` (1.5), key speeds (180 °/s), `elevation_drag_span`, `elevation_travel`, `sun_radius`, arc shape, blocked shake and colour |
 | `Game/HUDLayer/ShadowRunHUD` | `play_view_ratio_joystick` 90 / `play_view_ratio_slider` 75, `show_debug_button` (off; debug builds only), `min_safe_margin` |
 | `Game/Dracula` (`player/Dracula.tscn`) | `walk_speed` 5, `run_speed` 8, `run_threshold` 2 m, `acceleration` 45 m/s², `hop_time` 0.3 s, `hop_height`; Turning: `turn_speed_degrees` 720, `turn_in_place_angle` 100°, `turn_in_place_release` 20°, `facing_lookahead` 0.8 m, `facing_smoothing` 14/s; burn and death timings, cue angles |
-| `Game/Dracula/Visual/DraculaVisual` (`player/DraculaVisual.tscn`, inherited from `Dracula/dracula.glb`) | `walk_clip_speed` 1.44, `run_clip_speed` 4.24, `locomotion_blend_time` 0.2 s, `min_time_scale` 0.5; graph in `AnimationTree`; rim look in `dracula_rim.tres` |
+| `Game/Dracula/Visual/DraculaVisual` (`player/DraculaVisual.tscn`, inherited from `Dracula/dracula.glb`) | `walk_clip_speed` 1.44, `run_clip_speed` 4.24, `locomotion_blend_time` 0.2 s, `min_time_scale` 0.5; graph in `AnimationTree`; `CharacterLight`: `light_energy` 1.3, `light_color` (0.84, 0.86, 1), `light_specular` 0.25 |
+| `game/assets/materials/dracula/` | `dracula_rim.tres`: `rim_color` (pale violet), `rim_strength` 0.6, `rim_width` 0.28, burn `burn_color` / `burn_power`. `dracula_outline.tres`: `outline_color` (pale violet), `outline_width` 1.6 px. Per-surface colours and emission in `dracula_<part>.tres` |
+| `Game/HUDLayer/ShadowRunHUD/SafeArea` (`ui/common/SafeAreaMargin.tscn`) | `min_top` 16, `min_bottom` 32, `min_left` / `min_right` 24, `simulate_insets_top/bottom/left/right` (0; debug only) |
 | `Game/ShadowSensor` | `burn_rate` (100/1.2 per s), `heal_rate`, `ray_length` |
 | `Game/ShadowRunFeature` | Touch: `drag_start_distance` 25 px, `drag_start_time` 0.15 s, `drag_repath_rate` 12/s, `drag_hop_hold_time` 0.2 s, `edge_penalty` 2. Sun control: `default_sun_mode` (Joystick), `camera_distance_joystick` 3.6, `camera_distance_slider` 5.5. `title_time`, F6 fallback |
 | `Game/RunCamera` | `height`, `distance`, `pitch_degrees`, `fov`, `forward_smoothing`, death cam |
@@ -355,9 +402,7 @@ Rendered shadows and green/blue cells must coincide; captures confirmed they do.
   which is harmless (the player just picks a better pivot).
 - **Large casters can hide part of the level** from the high camera (for example Level 3's
   gate walls) until Dracula gets closer.
-- **Dracula is still the capsule placeholder** (the detailed character was reverted), so
-  there are no limbs or cloak physics. His run "animation" is a bob tied to distance
-  travelled, which scales with speed. Placeholder audio.
+- **Placeholder audio.** The burn flinch is a whole-body tilt (the model has no flinch clip).
 - **A faint moiré pattern shows on sunlit ground at the extreme high-sun angle** (around
   65°). It's not ordinary shadow acne: raising the bias didn't remove it. Mid angles
   render clean. Still to investigate.

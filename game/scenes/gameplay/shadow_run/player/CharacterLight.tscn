@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[node name="CharacterLight" type="DirectionalLight3D"]
+editor_description = "Lights ONLY the Character render layer (layer 2 = Dracula's mesh): his colours read in near-black shade while the ground, props and every shadow stay exactly as dark. Shadows off. top_level so it keeps the camera's direction (from the camera side, looking down like the camera) instead of turning with Dracula. Tune light_energy / light_color here."
+top_level = true
+transform = Transform3D(1, 0, 0, 0, 0.5736, 0.8192, 0, -0.8192, 0.5736, 0, 10, 4)
+light_color = Color(0.84, 0.86, 1, 1)
+light_energy = 1.3
+light_specular = 0.25
+light_cull_mask = 2
+shadow_enabled = false
+sky_mode = 1

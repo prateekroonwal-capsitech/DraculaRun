@@ -55,7 +55,7 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 ## Foot-level footprint the ShadowSensor ray-casts from (matches ShadeGrid's
 ## ground-point rule, so "standing on a shaded cell" = "not burning").
 @export var sample_points: Array[Node3D] = []
-## dracula_rim.tres (material_overlay on the model); its burn `intensity` is animated.
+## materials/dracula/dracula_rim.tres (next_pass of every surface material); its burn `intensity` is animated.
 @export var rim_material: ShaderMaterial
 
 @export_group("Burn feedback")

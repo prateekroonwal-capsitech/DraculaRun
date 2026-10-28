@@ -1,0 +1,9 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="1_rim"]
+
+[resource]
+resource_name = "Coat"
+next_pass = ExtResource("1_rim")
+albedo_color = Color(0.302, 0.302, 0.3412, 1)
+roughness = 0.7

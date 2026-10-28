@@ -2,8 +2,20 @@
 
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/Dracula/dracula.glb" id="1_glb"]
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.gd" id="2_vis"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula_rim.tres" id="3_rim"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula_eye.tres" id="4_eye"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_skin.tres" id="m0_skin"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_coat.tres" id="m1_coat"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_trousers.tres" id="m2_trousers"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_waistcoat.tres" id="m3_waistcoat"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_cravat.tres" id="m4_cravat"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_cloak.tres" id="m5_cloak"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_lining.tres" id="m6_lining"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_hair.tres" id="m7_hair"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_eyes.tres" id="m8_eyes"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_ruby.tres" id="m9_ruby"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_silver.tres" id="m10_silver"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_gloves.tres" id="m11_gloves"]
+[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_boots.tres" id="m12_boots"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/CharacterLight.tscn" id="5_light"]
 
 [sub_resource type="AnimationNodeAnimation" id="Anim_idle"]
 animation = &"Idle"
@@ -38,14 +50,26 @@ nodes/output/position = Vector2(480, 120)
 node_connections = [&"Speed", 0, &"Locomotion", &"output", 0, &"Speed"]
 
 [node name="DraculaVisual" node_paths=PackedStringArray("animation_tree") instance=ExtResource("1_glb")]
-editor_description = "Inherited scene of Dracula/dracula.glb (don't edit the .glb). Rotated 180° on Y: the model faces +Z, the game's forward is −Z. Feel: walk/run clip speeds and blend time on this root; graph in AnimationTree. Rim: material_overlay on DraculaMesh (dracula_rim.tres)."
+editor_description = "Inherited scene of Dracula/dracula.glb (don't edit the .glb). Rotated 180° on Y: the model faces +Z, the game's forward is −Z. Feel: walk/run clip speeds and blend time on this root; graph in AnimationTree. Colours: the .glb materials, duplicated per surface in game/assets/materials/dracula/ (each with next_pass dracula_rim → dracula_outline). Mesh on render layer 2 (Character), lit extra by CharacterLight (cull mask = Character only)."
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 script = ExtResource("2_vis")
 animation_tree = NodePath("AnimationTree")
 
 [node name="DraculaMesh" parent="Armature/Skeleton3D" index="0"]
-material_overlay = ExtResource("3_rim")
-surface_material_override/8 = ExtResource("4_eye")
+layers = 2
+surface_material_override/0 = ExtResource("m0_skin")
+surface_material_override/1 = ExtResource("m1_coat")
+surface_material_override/2 = ExtResource("m2_trousers")
+surface_material_override/3 = ExtResource("m3_waistcoat")
+surface_material_override/4 = ExtResource("m4_cravat")
+surface_material_override/5 = ExtResource("m5_cloak")
+surface_material_override/6 = ExtResource("m6_lining")
+surface_material_override/7 = ExtResource("m7_hair")
+surface_material_override/8 = ExtResource("m8_eyes")
+surface_material_override/9 = ExtResource("m9_ruby")
+surface_material_override/10 = ExtResource("m10_silver")
+surface_material_override/11 = ExtResource("m11_gloves")
+surface_material_override/12 = ExtResource("m12_boots")
 
 [node name="AnimationTree" type="AnimationTree" parent="." index="2"]
 editor_description = "Locomotion (BlendSpace1D Idle 0 / Walk 1.44 / Run 4.24 m/s) → Speed (TimeScale, anti foot-slide) → output. Driven by DraculaVisual.gd."
@@ -53,3 +77,5 @@ tree_root = SubResource("Tree_root")
 anim_player = NodePath("../AnimationPlayer")
 parameters/Locomotion/blend_position = 0.0
 parameters/Speed/scale = 1.0
+
+[node name="CharacterLight" parent="." index="3" instance=ExtResource("5_light")]
