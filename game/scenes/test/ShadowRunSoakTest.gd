@@ -511,15 +511,15 @@ func _check_joystick(f: ShadowRunFeature) -> void:
 	if not near.call(Vector2(sun.azimuth, sun.elevation), start, 0.3):
 		_fail("dial: release did not keep the target (%.1f/%.1f)" % [sun.azimuth, sun.elevation])
 	# Keys move the sun and the knob follows.
-	var press := InputEventAction.new()
-	press.action = &"sun_left"
-	press.pressed = true
-	Input.parse_input_event(press)
+	var key := InputEventKey.new()   # Q = sun_left, as a real key press
+	key.keycode = KEY_Q
+	key.physical_keycode = KEY_Q
+	key.pressed = true
+	Input.parse_input_event(key)
 	await _physics_frames(4)
-	var release := InputEventAction.new()
-	release.action = &"sun_left"
-	release.pressed = false
-	Input.parse_input_event(release)
+	var key_up := key.duplicate() as InputEventKey
+	key_up.pressed = false
+	Input.parse_input_event(key_up)
 	await _wait_settled(f)
 	if sun.azimuth >= start.x - 0.5 or not near.call(js.knob_center_global(), js.point_for_angles(sun.azimuth, sun.elevation), 2.0):
 		_fail("dial: Q key did not move the sun / knob (az %.1f)" % sun.azimuth)

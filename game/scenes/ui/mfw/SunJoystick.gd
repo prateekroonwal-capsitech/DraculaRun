@@ -147,7 +147,7 @@ func _input(event: InputEvent) -> void:
 ## Test hooks: the same grab / move / release path a finger takes.
 func press_at(viewport_pos: Vector2) -> void:
 	if _enabled and _sun and _touch == -99 and contains(viewport_pos):
-		_grab(-1, viewport_pos)
+		_grab(TEST_TOUCH, viewport_pos)
 
 func move_to(viewport_pos: Vector2) -> void:
 	if _touch != -99:

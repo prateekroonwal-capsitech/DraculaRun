@@ -1,10 +1,11 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c7jkjtup563a3"]
 
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/Dracula/dracula.glb" id="1_glb"]
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.gd" id="2_vis"]
+[ext_resource type="PackedScene" uid="uid://ch61n0jj8tfq7" path="res://game/scenes/gameplay/shadow_run/player/Dracula/dracula.glb" id="1_glb"]
+[ext_resource type="Script" uid="uid://xfa84ord3deb" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.gd" id="2_vis"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/CharacterLight.tscn" id="5_light"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_skin.tres" id="m0_skin"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_coat.tres" id="m1_coat"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_trousers.tres" id="m2_trousers"]
+[ext_resource type="Material" uid="uid://djdnfsbm3001f" path="res://game/assets/materials/dracula/dracula_coat.tres" id="m1_coat"]
+[ext_resource type="Material" uid="uid://cbuayao7jyn37" path="res://game/assets/materials/dracula/dracula_trousers.tres" id="m2_trousers"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_waistcoat.tres" id="m3_waistcoat"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_cravat.tres" id="m4_cravat"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_cloak.tres" id="m5_cloak"]
@@ -15,7 +16,6 @@
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_silver.tres" id="m10_silver"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_gloves.tres" id="m11_gloves"]
 [ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_boots.tres" id="m12_boots"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/CharacterLight.tscn" id="5_light"]
 
 [sub_resource type="AnimationNodeAnimation" id="Anim_idle"]
 animation = &"Idle"
@@ -27,35 +27,64 @@ animation = &"Walk"
 animation = &"Run"
 
 [sub_resource type="AnimationNodeBlendSpace1D" id="Blend_locomotion"]
-blend_point_0/node = SubResource("Anim_idle")
-blend_point_0/pos = 0.0
-blend_point_1/node = SubResource("Anim_walk")
-blend_point_1/pos = 1.44
-blend_point_2/node = SubResource("Anim_run")
-blend_point_2/pos = 4.24
 min_space = 0.0
 max_space = 4.24
 snap = 0.01
 value_label = "speed (m/s)"
-sync = true
+sync_mode = 1
+blend_point_0/node = SubResource("Anim_idle")
+blend_point_0/pos = 0.0
+blend_point_0/name = &"0"
+blend_point_1/node = SubResource("Anim_walk")
+blend_point_1/pos = 1.44
+blend_point_1/name = &"1"
+blend_point_2/node = SubResource("Anim_run")
+blend_point_2/pos = 4.24
+blend_point_2/name = &"2"
 
 [sub_resource type="AnimationNodeTimeScale" id="Scale_speed"]
 
 [sub_resource type="AnimationNodeBlendTree" id="Tree_root"]
+nodes/output/position = Vector2(480, 120)
 nodes/Locomotion/node = SubResource("Blend_locomotion")
 nodes/Locomotion/position = Vector2(0, 120)
 nodes/Speed/node = SubResource("Scale_speed")
 nodes/Speed/position = Vector2(260, 120)
-nodes/output/position = Vector2(480, 120)
-node_connections = [&"Speed", 0, &"Locomotion", &"output", 0, &"Speed"]
+node_connections = [&"output", 0, &"Speed", &"Speed", 0, &"Locomotion"]
 
-[node name="DraculaVisual" node_paths=PackedStringArray("animation_tree") instance=ExtResource("1_glb")]
+[node name="DraculaVisual" unique_id=1763100102 node_paths=PackedStringArray("animation_tree") instance=ExtResource("1_glb")]
 editor_description = "Inherited scene of Dracula/dracula.glb (don't edit the .glb). Rotated 180° on Y: the model faces +Z, the game's forward is −Z. Feel: walk/run clip speeds and blend time on this root; graph in AnimationTree. Colours: the .glb materials, duplicated per surface in game/assets/materials/dracula/ (each with next_pass dracula_rim → dracula_outline). Mesh on render layer 2 (Character), lit extra by CharacterLight (cull mask = Character only)."
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 script = ExtResource("2_vis")
 animation_tree = NodePath("AnimationTree")
 
-[node name="DraculaMesh" parent="Armature/Skeleton3D" index="0"]
+[node name="Skeleton3D" parent="Armature" parent_id_path=PackedInt32Array(741611709) index="0" unique_id=513219213]
+bones/1/position = Vector3(0, 0.966, 0)
+bones/3/rotation = Quaternion(-0.013089595, 0, 0, 0.99991435)
+bones/4/rotation = Quaternion(0.017452406, 0, 0, 0.9998477)
+bones/5/rotation = Quaternion(-0.02997284, 0.0003301591, 0.011009658, 0.99949)
+bones/6/rotation = Quaternion(-0.02106084, 0.00091953605, 0.043609694, 0.9988262)
+bones/7/rotation = Quaternion(-0.13428639, 0, 0, 0.99094266)
+bones/8/rotation = Quaternion(-0.06966087, 0.0036507717, 0.05220847, 0.9961969)
+bones/9/rotation = Quaternion(0.009000139, -0.00018392714, 0.02043094, 0.99975073)
+bones/10/rotation = Quaternion(0.00044349025, -9.325795e-06, 0.021023536, 0.99977887)
+bones/11/rotation = Quaternion(0.0024219966, -3.4688932e-05, 0.014320944, 0.9998946)
+bones/12/rotation = Quaternion(0.019056382, -0.00012359422, 0.0064843986, 0.9997974)
+bones/13/rotation = Quaternion(-0.02106084, -0.00091953605, -0.043609694, 0.9988262)
+bones/14/rotation = Quaternion(-0.13428639, 0, 0, 0.99094266)
+bones/15/rotation = Quaternion(-0.06966087, -0.0036507717, -0.05220847, 0.9961969)
+bones/16/rotation = Quaternion(0.012862525, 0.000262859, -0.020430077, 0.99970853)
+bones/17/rotation = Quaternion(0.0015924674, 3.34867e-05, -0.02102351, 0.99977773)
+bones/18/rotation = Quaternion(-0.002780967, -3.983027e-05, -0.014320929, 0.9998936)
+bones/19/rotation = Quaternion(0.008244556, 5.3471827e-05, -0.006485356, 0.999945)
+bones/20/rotation = Quaternion(0, 0, 0.013089595, 0.99991435)
+bones/21/rotation = Quaternion(0.017452406, 0, 0, 0.9998477)
+bones/22/rotation = Quaternion(-0.017450912, -0.00022844494, -0.013087602, 0.99976206)
+bones/23/rotation = Quaternion(0, 0, -0.013089595, 0.99991435)
+bones/24/rotation = Quaternion(0.017452406, 0, 0, 0.9998477)
+bones/25/rotation = Quaternion(-0.017450912, 0.00022844494, 0.013087602, 0.99976206)
+
+[node name="DraculaMesh" parent="Armature/Skeleton3D" index="0" unique_id=610147886]
 layers = 2
 surface_material_override/0 = ExtResource("m0_skin")
 surface_material_override/1 = ExtResource("m1_coat")
@@ -71,11 +100,11 @@ surface_material_override/10 = ExtResource("m10_silver")
 surface_material_override/11 = ExtResource("m11_gloves")
 surface_material_override/12 = ExtResource("m12_boots")
 
-[node name="AnimationTree" type="AnimationTree" parent="." index="2"]
+[node name="AnimationTree" type="AnimationTree" parent="." index="2" unique_id=1738533691]
 editor_description = "Locomotion (BlendSpace1D Idle 0 / Walk 1.44 / Run 4.24 m/s) → Speed (TimeScale, anti foot-slide) → output. Driven by DraculaVisual.gd."
 tree_root = SubResource("Tree_root")
 anim_player = NodePath("../AnimationPlayer")
 parameters/Locomotion/blend_position = 0.0
 parameters/Speed/scale = 1.0
 
-[node name="CharacterLight" parent="." index="3" instance=ExtResource("5_light")]
+[node name="CharacterLight" parent="." index="3" unique_id=1935472138 instance=ExtResource("5_light")]

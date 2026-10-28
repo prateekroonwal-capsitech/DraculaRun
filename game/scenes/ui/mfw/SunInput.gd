@@ -20,6 +20,10 @@ signal drag_ended
 enum Mode { JOYSTICK, SLIDER }
 const MODE_KEYS: PackedStringArray = ["joystick", "slider"]
 
+## Touch index used by test hooks (press_at / move_to / release): no real device
+## produces it, so a real mouse or finger never hijacks a scripted drag.
+const TEST_TOUCH := 31
+
 var _sun: SunRig
 
 static func mode_from_key(key: String, fallback: Mode) -> Mode:

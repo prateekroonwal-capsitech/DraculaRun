@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://ceyylqce0lhyv"]
 
-[ext_resource type="Shader" path="res://game/assets/shaders/dracula_outline.gdshader" id="1_outline"]
+[ext_resource type="Shader" uid="uid://bg55ivoexiga1" path="res://game/assets/shaders/dracula_outline.gdshader" id="1_outline"]
 
 [resource]
 render_priority = -1

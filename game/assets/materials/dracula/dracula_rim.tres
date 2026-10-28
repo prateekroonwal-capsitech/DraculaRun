@@ -1,13 +1,13 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cu3w2naqtv1i1"]
 
-[ext_resource type="Shader" path="res://game/assets/shaders/dracula_rim.gdshader" id="1_rim"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_outline.tres" id="2_outline"]
+[ext_resource type="Shader" uid="uid://d1yyifvnoqx3b" path="res://game/assets/shaders/dracula_rim.gdshader" id="1_rim"]
+[ext_resource type="Material" uid="uid://ceyylqce0lhyv" path="res://game/assets/materials/dracula/dracula_outline.tres" id="2_outline"]
 
 [resource]
 render_priority = 1
 next_pass = ExtResource("2_outline")
 shader = ExtResource("1_rim")
-shader_parameter/rim_color = Color(0.78, 0.72, 1, 1)
+shader_parameter/rim_color = Color(0.93333334, 0.29411766, 0.16862746, 1)
 shader_parameter/rim_strength = 0.6
 shader_parameter/rim_width = 0.28
 shader_parameter/burn_color = Color(1, 0.42, 0.06, 1)

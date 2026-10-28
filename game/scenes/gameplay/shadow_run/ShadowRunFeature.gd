@@ -358,10 +358,10 @@ func ground_point(viewport_pos: Vector2) -> Variant:
 		return null
 	return origin + normal * t
 
-## Test hooks: the same press / move / release path a finger takes (mouse index).
+## Test hooks: the same press / move / release path a finger takes (synthetic touch index, so a real mouse never interferes).
 func begin_drag_at(viewport_pos: Vector2) -> void:
-	_on_finger(-1, viewport_pos, true)
-	if _finger == -1:
+	_on_finger(SunInput.TEST_TOUCH, viewport_pos, true)
+	if _finger == SunInput.TEST_TOUCH:
 		_begin_move_drag()
 
 func drag_to(viewport_pos: Vector2) -> void:

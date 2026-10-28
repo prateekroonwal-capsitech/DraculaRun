@@ -76,18 +76,18 @@ func is_dragging() -> bool:
 func contains(viewport_pos: Vector2) -> bool:
 	return is_visible_in_tree() and _is_inside(viewport_pos)
 
-## Test hooks: the same grab / move / release path a finger takes (mouse index).
+## Test hooks: the same grab / move / release path a finger takes (synthetic touch index).
 func press_at(viewport_pos: Vector2) -> void:
-	if _enabled and _sun and contains(viewport_pos) and not _owned_touches.has(-1):
-		_begin_drag(-1, viewport_pos)
+	if _enabled and _sun and contains(viewport_pos) and not _owned_touches.has(TEST_TOUCH):
+		_begin_drag(TEST_TOUCH, viewport_pos)
 
 func move_to(viewport_pos: Vector2) -> void:
-	if _owned_touches.has(-1):
-		_drag_to(-1, viewport_pos)
+	if _owned_touches.has(TEST_TOUCH):
+		_drag_to(TEST_TOUCH, viewport_pos)
 
 func release() -> void:
-	if _owned_touches.has(-1):
-		_end_drag(-1)
+	if _owned_touches.has(TEST_TOUCH):
+		_end_drag(TEST_TOUCH)
 
 ## Viewport position that maps to (azimuth, elevation) for a grab made at `grab_pos`
 ## while the target was (grab_az, grab_el) — the inverse of _drag_to(). For tests.
