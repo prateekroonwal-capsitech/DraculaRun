@@ -6,6 +6,9 @@ extends UIController
 ## First puzzle level (a level-select screen can replace this later).
 const FIRST_LEVEL_SCENE := "res://game/scenes/gameplay/shadow_run/levels/Level01.tscn"
 
+## Level select panel opened by the Play button.
+@export var level_select_panel: PackedScene = preload("res://game/scenes/ui/mfw/LevelSelectPanel.tscn")
+
 @onready var label: Label = $CenterContainer/VBoxContainer/Label
 @onready var sub_label: Label = $CenterContainer/VBoxContainer/SubLabel
 @onready var play_button: Button = %PlayButton
@@ -38,6 +41,8 @@ func _on_ready() -> void:
 		sub_label.text = "Levels cleared: %d" % (_save.get_level() - 1)
 
 func _on_play_pressed() -> void:
-	play_button.disabled = true
-	if _scene:
+	if _ui_manager and level_select_panel:
+		_ui_manager.push_packed(level_select_panel)
+	elif _scene:
+		play_button.disabled = true
 		_scene.go_to(FIRST_LEVEL_SCENE)

@@ -25,7 +25,6 @@ editor_description = "Puzzle level. Move Start / Goal / casters freely; keep the
 script = ExtResource("1_level")
 level_number = 2
 level_title = "Two Alleys"
-next_level = "res://game/scenes/gameplay/shadow_run/levels/Level03.tscn"
 hint = "Two ways around the chapel. Each needs the sun moved at a different moment."
 sun_start_azimuth = -35
 sun_start_elevation = 38

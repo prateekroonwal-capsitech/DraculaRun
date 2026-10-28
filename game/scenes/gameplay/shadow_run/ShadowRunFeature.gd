@@ -16,10 +16,15 @@ extends GameFeature
 ## @export and configured here — they are not shared services. Shared services arrive
 ## through inject_services()/initialize() only.
 
+## Emitted when level warm-up, camera positioning and shade grid setup are complete.
+signal level_ready
+
 const HOME_SCENE := "res://game/scenes/Home/Home.tscn"
+const LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/LevelCatalog.gd")
 ## SaveManager key for the player's sun control choice ("joystick" / "slider").
 const SUN_MODE_KEY := "sun_control_mode"
 
+@export var catalog: LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/level_catalog.tres")
 ## The level root (set by each levels/LevelNN.tscn on its Game/ShadowRunFeature node).
 @export var level: ShadowLevel
 @export var dracula: DraculaController
@@ -73,6 +78,7 @@ var _logger: Node
 var _running: bool = false
 var _finished: bool = false
 var _leaving: bool = false
+var _is_level_ready: bool = false
 var _sun_dragging: bool = false
 var _pending_tap: Variant = null
 var _clock: float = 0.0
@@ -148,14 +154,32 @@ func _find_ancestor_level() -> ShadowLevel:
 
 # ── Setup ─────────────────────────────────────────────────────────────────
 
+func is_ready() -> bool:
+	return _is_level_ready
+
 func _setup() -> void:
+	if catalog and is_instance_valid(level):
+		var entry := catalog.get_entry_by_scene(level.scene_file_path)
+		if entry:
+			var idx := catalog.get_index_by_scene(level.scene_file_path)
+			level.level_number = idx + 1
+			level.level_title = entry.display_name
+
 	var grid := level.grid
 	sun_rig.configure(level.azimuth_min, level.azimuth_max, level.elevation_min, level.elevation_max,
 		level.sun_start_azimuth, level.sun_start_elevation)
 	dracula.place_at(level.start.global_position, level.start.global_rotation.y)
+	dracula.reset_physics_interpolation()
 	_apply_sun_mode(_load_sun_mode())
 	run_camera.center_x = level.center_x()
 	run_camera.follow(dracula)
+	run_camera.reset_physics_interpolation()
+
+	if hud:
+		var safe := hud.get_node_or_null("SafeArea") as SafeAreaMargin
+		if safe:
+			safe.apply()
+
 	# Level bodies must be in the physics space before the grid ray-casts.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -192,6 +216,22 @@ func _setup() -> void:
 	hud.show_title("LEVEL %d" % level.level_number, title_time)
 	if level.hint != "":
 		hud.show_hint(level.hint, 5.0)
+
+	# Pipeline & shader warm-up behind the loading screen curtain
+	if dracula.smoke:
+		dracula.smoke.emitting = true
+		dracula.smoke.emitting = false
+	if dracula.embers:
+		dracula.embers.emitting = true
+		dracula.embers.emitting = false
+	if dracula.bats:
+		dracula.bats.emitting = true
+		dracula.bats.emitting = false
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	_is_level_ready = true
+	level_ready.emit()
 	start()
 
 func start() -> void:
@@ -586,11 +626,18 @@ func _on_goal_reached() -> void:
 	_bus.level_completed.emit(str(level.level_number))
 	if _logger:
 		_logger.info("ShadowRun: level complete", {"level": level.level_number})
+	var next_scene := ""
+	if catalog:
+		next_scene = catalog.get_next_scene(level.scene_file_path)
+	elif level.next_level != "":
+		next_scene = level.next_level
+	var has_next: bool = next_scene != ""
+
 	_ui.push_packed(level_complete_panel)
 	var panel := _ui.current() as LevelCompletePanel
 	if panel:
-		panel.show_result(level.level_title, level.level_number, level.next_level != "")
-		panel.next_requested.connect(_leave.bind(level.next_level if level.next_level != "" else HOME_SCENE))
+		panel.show_result(level.level_title, level.level_number, has_next)
+		panel.next_requested.connect(_leave.bind(next_scene if has_next else HOME_SCENE))
 		panel.retry_requested.connect(_leave.bind(level.scene_file_path))
 		panel.home_requested.connect(_leave.bind(HOME_SCENE))
 

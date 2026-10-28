@@ -76,6 +76,11 @@ func pop_to_root() -> void:
 	while _stack.size() > 1:
 		pop()
 
+## Clears all screens from the stack.
+func clear_all() -> void:
+	while not _stack.is_empty():
+		pop()
+
 func replace_packed(packed: PackedScene) -> void:
 	pop()
 	push_packed(packed)

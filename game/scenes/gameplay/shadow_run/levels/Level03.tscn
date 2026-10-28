@@ -25,7 +25,6 @@ editor_description = "Puzzle level. Move Start / Goal / casters freely; keep the
 script = ExtResource("1_level")
 level_number = 3
 level_title = "The Narrow Gate"
-next_level = ""
 hint = "Lower the sun to reach the wall, then swing it left to open the gate."
 sun_start_azimuth = 30
 sun_start_elevation = 45

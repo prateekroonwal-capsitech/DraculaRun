@@ -13,6 +13,9 @@ extends Node3D
 ## Exit code 0 = all levels pass. Each level is loaded WITHOUT its gameplay shell
 ## ("Game" child is removed before it enters the tree), so nothing boots.
 
+const LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/LevelCatalog.gd")
+
+@export var catalog: LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/level_catalog.tres")
 @export_file("*.tscn") var level_scenes: PackedStringArray = PackedStringArray()
 @export var solver: LevelSolver
 @export var logger: Node
@@ -57,6 +60,10 @@ func _ready() -> void:
 			hide_overrides = arg.trim_prefix("--hide=").split(";")
 		elif arg.begins_with("--range="):
 			range_override = PackedFloat32Array(Array(arg.trim_prefix("--range=").split(",")).map(func(v): return float(v)))
+	if level_scenes.is_empty() and catalog != null:
+		for entry in catalog.entries:
+			if entry and entry.scene_path != "":
+				level_scenes.append(entry.scene_path)
 	_run.call_deferred()
 
 func _run() -> void:

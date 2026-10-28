@@ -24,7 +24,6 @@ size = Vector3(40, 0.2, 90)
 editor_description = "Puzzle level. Move Start / Goal / casters freely; keep the ShadeGrid covering the walkable floor. Run level/LevelValidatorRunner.tscn after edits."
 script = ExtResource("1_level")
 level_title = "The Gargoyle"
-next_level = "res://game/scenes/gameplay/shadow_run/levels/Level02.tscn"
 hint = "Turn the sun to move the shadows. Rest in the statue's shadow while you turn it."
 start = NodePath("Start")
 goal = NodePath("Goal")

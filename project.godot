@@ -83,6 +83,7 @@ common/physics_interpolation=true
 
 [rendering]
 
+environment/defaults/default_clear_color=Color(0.07, 0.04, 0.09, 1)
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/positional_shadow/atlas_size.mobile=1024
