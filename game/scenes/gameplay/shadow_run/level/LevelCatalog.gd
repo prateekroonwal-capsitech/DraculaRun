@@ -23,15 +23,25 @@ func get_entry_by_id(id: String) -> LevelCatalogEntry:
 	return null
 
 func get_entry_by_scene(scene_path: String) -> LevelCatalogEntry:
+	var clean := scene_path.trim_suffix(".remap")
+	var file_name := clean.get_file()
 	for entry in entries:
-		if entry and entry.scene_path == scene_path:
-			return entry
+		if entry:
+			if entry.scene_path == scene_path or entry.scene_path.trim_suffix(".remap") == clean:
+				return entry
+			if file_name != "" and entry.scene_path.get_file() == file_name:
+				return entry
 	return null
 
 func get_index_by_scene(scene_path: String) -> int:
+	var clean := scene_path.trim_suffix(".remap")
+	var file_name := clean.get_file()
 	for i in range(entries.size()):
-		if entries[i] and entries[i].scene_path == scene_path:
-			return i
+		if entries[i]:
+			if entries[i].scene_path == scene_path or entries[i].scene_path.trim_suffix(".remap") == clean:
+				return i
+			if file_name != "" and entries[i].scene_path.get_file() == file_name:
+				return i
 	return -1
 
 func get_next_scene(current_scene: String) -> String:

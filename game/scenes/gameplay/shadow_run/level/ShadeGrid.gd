@@ -96,6 +96,9 @@ func _ready() -> void:
 ## Builds the solid map, the variable-cell mask and the first shade pass.
 ## Call after the level's bodies are in the physics space (≥1 physics frame).
 func setup(sun: SunRig, azimuth_min: float, azimuth_max: float, elevation_min: float, elevation_max: float) -> void:
+	print("[STARTUP %dms] ShadeGrid.setup: sun=%s az=[%.1f, %.1f] el=[%.1f, %.1f]" % [
+		Time.get_ticks_msec(), sun != null, azimuth_min, azimuth_max, elevation_min, elevation_max
+	])
 	_sun = sun
 	build_static()
 	var masks := _build_variable_mask(azimuth_min, azimuth_max, elevation_min, elevation_max)
@@ -103,6 +106,9 @@ func setup(sun: SunRig, azimuth_min: float, azimuth_max: float, elevation_min: f
 	_variable = masks[1]
 	refresh_now()
 	set_physics_process(true)
+	print("[STARTUP %dms] ShadeGrid.setup: complete! cells=%d variable=%d" % [
+		Time.get_ticks_msec(), cell_count(), _variable.size()
+	])
 
 ## Grid dimensions + solid map only (no sun needed). Used by setup() and LevelSolver.
 func build_static() -> void:

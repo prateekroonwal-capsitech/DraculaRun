@@ -13,9 +13,13 @@ func _ready() -> void:
 	# UI screens don't need per-frame ticking by default.
 	set_process(false)
 	set_physics_process(false)
-	if _ui_manager != null and not _initialized:
-		_initialized = true
-		_on_ready()
+	if not _initialized:
+		var reg: Node = get_node_or_null("/root/ServiceRegistry")
+		if reg:
+			inject_services(reg)
+		elif _ui_manager != null:
+			_initialized = true
+			_on_ready()
 
 ## Convention-based auto-wiring for visually placed scenes (Pattern 2).
 func inject_services(registry: Node) -> void:

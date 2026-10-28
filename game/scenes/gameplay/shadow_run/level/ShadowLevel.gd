@@ -29,6 +29,16 @@ extends Node3D
 ## may need (1 = the sun must be used at all; raise it for harder levels).
 @export_range(1, 6) var min_sun_adjustments: int = 1
 
+@export_group("Camera overrides")
+## Pitch override in degrees (40.0–50.0). 0.0 uses camera default (45°).
+@export_range(0.0, 60.0) var camera_pitch: float = 0.0
+## Distance override in meters. 0.0 uses camera default.
+@export var camera_distance: float = 0.0
+## Height override in meters. 0.0 uses camera default.
+@export var camera_height: float = 0.0
+## Optional explicit camera pan bounds (X min, X max, Z min, Z max). If zero, computed from ShadeGrid.
+@export var pan_bounds: Vector4 = Vector4.ZERO
+
 @export_group("Scene parts")
 @export var start: Marker3D
 @export var goal: LevelGoal
@@ -37,3 +47,16 @@ extends Node3D
 ## World X of the grid's centre line (the camera centres here so the whole width shows).
 func center_x() -> float:
 	return grid.to_global(Vector3(grid.size.x * 0.5, 0.0, 0.0)).x
+
+## Level bounding rectangle in the XZ ground plane (X: horizontal, Y: along -Z).
+func get_level_bounds() -> Rect2:
+	if pan_bounds != Vector4.ZERO:
+		return Rect2(pan_bounds.x, pan_bounds.z, pan_bounds.y - pan_bounds.x, pan_bounds.w - pan_bounds.z)
+	if grid:
+		var origin := grid.global_position
+		var min_x := origin.x - 3.0
+		var max_x := origin.x + grid.size.x + 3.0
+		var min_z := origin.z - grid.size.y - 5.0
+		var max_z := origin.z + 5.0
+		return Rect2(min_x, min_z, max_x - min_x, max_z - min_z)
+	return Rect2(-10.0, -60.0, 20.0, 70.0)

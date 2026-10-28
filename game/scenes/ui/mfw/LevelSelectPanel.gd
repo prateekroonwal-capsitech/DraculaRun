@@ -124,6 +124,9 @@ func _on_card_pressed(index: int) -> void:
 		return
 
 	_is_transitioning = true
+	print("[STARTUP %dms] LevelSelectPanel._on_card_pressed: index=%d entry=%s scene=%s" % [
+		Time.get_ticks_msec(), index, entry.display_name, entry.scene_path
+	])
 	for c in _cards:
 		c.set_card_disabled(true)
 	_back_button.disabled = true
@@ -136,8 +139,10 @@ func _on_card_pressed(index: int) -> void:
 	if card:
 		await card.play_select_anim()
 
-	# Hide this panel immediately so it never shows over the loading screen or level
+	# Hide this panel immediately and remove from stack
 	hide()
+	if _ui_manager:
+		_ui_manager.pop()
 
 	if _scene:
 		_scene.go_to(entry.scene_path)

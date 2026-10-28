@@ -64,6 +64,9 @@ func fade_in(duration: float = 0.2) -> void:
 	_resolve_nodes()
 	visible = true
 	set_process(true)
+	if _fader:
+		_fader.mouse_filter = Control.MOUSE_FILTER_STOP
+	print("[STARTUP %dms] LoadingScreen.fade_in: duration=%.2f" % [Time.get_ticks_msec(), duration])
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
@@ -72,12 +75,14 @@ func fade_in(duration: float = 0.2) -> void:
 		if tw:
 			tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await _tween.finished
+	print("[STARTUP %dms] LoadingScreen.fade_in: completed!" % Time.get_ticks_msec())
 	faded_in.emit()
 
 func fade_out(duration: float = 0.25) -> void:
 	if not is_inside_tree():
 		await tree_entered
 	_resolve_nodes()
+	print("[STARTUP %dms] LoadingScreen.fade_out: duration=%.2f" % [Time.get_ticks_msec(), duration])
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
@@ -87,5 +92,8 @@ func fade_out(duration: float = 0.25) -> void:
 			tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await _tween.finished
 	visible = false
+	if _fader:
+		_fader.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(false)
+	print("[STARTUP %dms] LoadingScreen.fade_out: completed (visible=false)" % Time.get_ticks_msec())
 	faded_out.emit()

@@ -62,6 +62,9 @@ func _ready() -> void:
 
 ## Per-level setup: azimuth/elevation ranges and the starting angle.
 func configure(az_min: float, az_max: float, el_min: float, el_max: float, start_az: float, start_el: float) -> void:
+	print("[STARTUP %dms] SunRig.configure: az=[%.1f, %.1f] el=[%.1f, %.1f] start=(%.1f, %.1f)" % [
+		Time.get_ticks_msec(), az_min, az_max, el_min, el_max, start_az, start_el
+	])
 	azimuth_min = az_min
 	azimuth_max = az_max
 	elevation_min = el_min

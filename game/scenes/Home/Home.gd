@@ -41,6 +41,7 @@ func _on_ready() -> void:
 		sub_label.text = "Levels cleared: %d" % (_save.get_level() - 1)
 
 func _on_play_pressed() -> void:
+	print("[STARTUP %dms] HomeScene._on_play_pressed" % Time.get_ticks_msec())
 	if _ui_manager and level_select_panel:
 		_ui_manager.push_packed(level_select_panel)
 	elif _scene:

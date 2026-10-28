@@ -18,11 +18,82 @@ extends GameFeature
 
 ## Emitted when level warm-up, camera positioning and shade grid setup are complete.
 signal level_ready
+signal state_changed(new_state: LevelState)
+
+enum LevelState {
+	LOADING,
+	INTRO,
+	PLAYING,
+	PAUSED,
+	DEAD,
+	WON
+}
+
+var state: LevelState = LevelState.LOADING
 
 const HOME_SCENE := "res://game/scenes/Home/Home.tscn"
 const LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/LevelCatalog.gd")
+const ShadowLevel = preload("res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd")
 ## SaveManager key for the player's sun control choice ("joystick" / "slider").
 const SUN_MODE_KEY := "sun_control_mode"
+
+@export_group("Startup & Safety")
+## Debug logs for level startup steps. Off by default.
+@export var debug_startup_logs: bool = false
+## Grace period (seconds) at level start where exposure damage is suppressed.
+@export var start_exposure_grace_period: float = 1.0
+
+var _exposure_grace_timer: float = 0.0
+
+func _log(msg: String) -> void:
+	if debug_startup_logs or OS.is_debug_build():
+		print("[SHADOW_RUN %dms] %s" % [Time.get_ticks_msec(), msg])
+
+func set_state(new_state: LevelState) -> void:
+	if state == new_state:
+		return
+	var old_state := state
+	state = new_state
+	_log("State transition: %s -> %s" % [_state_name(old_state), _state_name(new_state)])
+	state_changed.emit(new_state)
+
+	match state:
+		LevelState.PLAYING:
+			_running = true
+			dracula.activate()
+			sensor.set_active(true)
+			set_physics_process(true)
+			_exposure_grace_timer = start_exposure_grace_period
+			if _bus:
+				_bus.level_started.emit(str(level.level_number))
+		LevelState.INTRO:
+			_running = false
+			set_physics_process(false)
+		LevelState.PAUSED:
+			_running = false
+			set_physics_process(false)
+			if _bus:
+				_bus.game_paused.emit()
+		LevelState.DEAD:
+			_running = false
+			set_physics_process(false)
+			if _bus:
+				_bus.player_died.emit()
+		LevelState.WON:
+			_running = false
+			set_physics_process(false)
+			if _bus:
+				_bus.level_completed.emit(str(level.level_number))
+
+func _state_name(s: LevelState) -> String:
+	match s:
+		LevelState.LOADING: return "LOADING"
+		LevelState.INTRO: return "INTRO"
+		LevelState.PLAYING: return "PLAYING"
+		LevelState.PAUSED: return "PAUSED"
+		LevelState.DEAD: return "DEAD"
+		LevelState.WON: return "WON"
+	return "UNKNOWN"
 
 @export var catalog: LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/level_catalog.tres")
 ## The level root (set by each levels/LevelNN.tscn on its Game/ShadowRunFeature node).
@@ -99,11 +170,17 @@ var _ray_query: PhysicsRayQueryParameters3D
 var _region: PackedByteArray = PackedByteArray()
 var _path_points: PackedVector3Array = PackedVector3Array()
 var _raw_path_points: PackedVector3Array = PackedVector3Array()
+var _touches: Dictionary = {}
+var _last_pinch_dist: float = -1.0
+var _last_pinch_mid: Vector2 = Vector2.ZERO
+var _mouse_panning: bool = false
+var _mouse_pan_prev: Vector2 = Vector2.ZERO
 
 # ── Injection ─────────────────────────────────────────────────────────────
 
 ## Adapter for SceneManager's convention-based scene injection.
 func inject_services(registry: Node) -> void:
+	print("[STARTUP %dms] ShadowRunFeature.inject_services: registry=%s" % [Time.get_ticks_msec(), registry != null])
 	if not registry:
 		return
 	initialize({
@@ -118,6 +195,7 @@ func inject_services(registry: Node) -> void:
 	})
 
 func initialize(dependencies: Dictionary) -> void:
+	print("[STARTUP %dms] ShadowRunFeature.initialize: initialized=%s level=%s" % [Time.get_ticks_msec(), _initialized, level != null])
 	if _initialized:
 		return
 	super.initialize(dependencies)
@@ -130,18 +208,27 @@ func initialize(dependencies: Dictionary) -> void:
 	_bus = dependencies.get("bus") as Node
 	_logger = dependencies.get("logger") as Node
 	if level == null:
-		level = _find_ancestor_level()   # editor re-saves can drop the Game/ShadowRunFeature.level override
+		level = _find_ancestor_level()
+		print("[STARTUP %dms] ShadowRunFeature: _find_ancestor_level returned %s" % [Time.get_ticks_msec(), level != null])
+	print("[STARTUP %dms] Dependencies: game=%s scene=%s ui=%s bus=%s level=%s" % [
+		Time.get_ticks_msec(), _game != null, _scene != null, _ui != null, _bus != null, level != null
+	])
 	if _game == null or _scene == null or _ui == null or _bus == null or level == null:
 		push_error("ShadowRunFeature: missing required dependency (game/scene/ui/bus/level)")
 		return
-	# Deferred: SceneManager injects the rest of the scene in this same loop.
 	_setup.call_deferred()
 
 func _ready() -> void:
+	print("[STARTUP %dms] ShadowRunFeature._ready" % Time.get_ticks_msec())
 	process_physics_priority = 20   # after Dracula (0) and ShadowSensor (10)
 	set_physics_process(false)      # PDF §4: idle until the level starts
 	_ray_query = PhysicsRayQueryParameters3D.new()
-	if editor_f6_fallback and OS.has_feature("editor"):
+	if not _initialized:
+		var reg: Node = get_node_or_null("/root/ServiceRegistry")
+		if reg:
+			print("[STARTUP %dms] ShadowRunFeature._ready: auto-wiring from ServiceRegistry" % Time.get_ticks_msec())
+			inject_services(reg)
+	if editor_f6_fallback and OS.has_feature("editor") and not _initialized:
 		_editor_fallback_boot.call_deferred()
 
 func _find_ancestor_level() -> ShadowLevel:
@@ -158,20 +245,59 @@ func is_ready() -> bool:
 	return _is_level_ready
 
 func _setup() -> void:
+	_log("_setup START")
+	if level == null:
+		level = _find_ancestor_level()
+	if level == null:
+		push_error("ShadowRunFeature._setup: level root is null!")
+		return
+
+	if level.grid == null:
+		level.grid = level.get_node_or_null("ShadeGrid") as ShadeGrid
+	if level.start == null:
+		level.start = level.get_node_or_null("Start") as Marker3D
+	if level.goal == null:
+		level.goal = level.get_node_or_null("Goal") as LevelGoal
+
 	if catalog and is_instance_valid(level):
-		var entry := catalog.get_entry_by_scene(level.scene_file_path)
+		var sc_path := level.scene_file_path
+		var entry := catalog.get_entry_by_scene(sc_path)
 		if entry:
-			var idx := catalog.get_index_by_scene(level.scene_file_path)
+			var idx := catalog.get_index_by_scene(sc_path)
 			level.level_number = idx + 1
 			level.level_title = entry.display_name
+			_log("catalog matched level %d '%s'" % [level.level_number, level.level_title])
+		elif level.name.begins_with("Level"):
+			var digits := level.name.trim_prefix("Level")
+			if digits.is_valid_int():
+				var num := digits.to_int()
+				level.level_number = num
+				var cat_entry := catalog.get_entry(num - 1)
+				if cat_entry:
+					level.level_title = cat_entry.display_name
+					_log("fallback level name matched level %d '%s'" % [level.level_number, level.level_title])
 
+	# 1. Apply the level's start sun angle synchronously before anything queries or renders
 	var grid := level.grid
+	_log("Configuring SunRig: az=[%.1f, %.1f] el=[%.1f, %.1f] start=(%.1f, %.1f)" % [
+		level.azimuth_min, level.azimuth_max, level.elevation_min, level.elevation_max,
+		level.sun_start_azimuth, level.sun_start_elevation
+	])
 	sun_rig.configure(level.azimuth_min, level.azimuth_max, level.elevation_min, level.elevation_max,
 		level.sun_start_azimuth, level.sun_start_elevation)
-	dracula.place_at(level.start.global_position, level.start.global_rotation.y)
+	sun_rig.snap_to(level.sun_start_azimuth, level.sun_start_elevation)
+
+	# 2. Place Dracula on the start marker
+	var start_pos := level.start.global_position if level.start else Vector3.ZERO
+	var start_rot := level.start.global_rotation.y if level.start else 0.0
+	dracula.place_at(start_pos, start_rot)
 	dracula.reset_physics_interpolation()
 	_apply_sun_mode(_load_sun_mode())
+
+	# 3. Configure camera bounds, overrides and follow
 	run_camera.center_x = level.center_x()
+	run_camera.set_bounds(level.get_level_bounds())
+	run_camera.apply_level_overrides(level.camera_pitch, level.camera_distance, level.camera_height)
 	run_camera.follow(dracula)
 	run_camera.reset_physics_interpolation()
 
@@ -180,16 +306,36 @@ func _setup() -> void:
 		if safe:
 			safe.apply()
 
-	# Level bodies must be in the physics space before the grid ray-casts.
+	# 4. Await physics frames so all static bodies are registered in the physics space
+	_log("awaiting physics frames...")
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	if not is_inside_tree():
 		return
+
+	# 5. Build shade grid
 	var t0 := Time.get_ticks_msec()
+	_log("grid.setup starting...")
 	grid.setup(sun_rig, level.azimuth_min, level.azimuth_max, level.elevation_min, level.elevation_max)
+	_log("grid ready in %d ms (cells=%d, var=%d)" % [
+		Time.get_ticks_msec() - t0, grid.cell_count(), grid.variable_cell_count()
+	])
 	if _logger:
 		_logger.info("ShadowRun: grid ready", {"cells": grid.cell_count(), "variable": grid.variable_cell_count(),
 			"ms": Time.get_ticks_msec() - t0})
+
+	# 6. Start safety: verify Dracula's start cell is shaded at the start sun angle
+	var start_cell := grid.cell_at(dracula.global_position)
+	if not grid.is_walkable(start_cell):
+		_log("WARNING: Start cell %s is in sunlight! Searching nearest shaded cell..." % str(start_cell))
+		var safe_cell := grid.nearest_walkable(start_cell, 3)
+		if grid.in_bounds(safe_cell) and grid.is_walkable(safe_cell):
+			var safe_pos := grid.cell_center(safe_cell)
+			dracula.place_at(safe_pos, level.start.global_rotation.y)
+			dracula.reset_physics_interpolation()
+			_log("Snapped Dracula to safe shaded cell %s at %s" % [str(safe_cell), str(safe_pos)])
+
+	# 7. Wire signals
 	sensor.setup(dracula.get_sample_points(), sun_rig)
 	sensor.exposure_changed.connect(_on_exposure_changed)
 	sensor.burned_out.connect(_on_burned_out)
@@ -210,14 +356,17 @@ func _setup() -> void:
 	hud.sun_drag_ended.connect(_on_sun_drag_ended)
 	debug_overlay.setup(grid, sensor, sun_rig, dracula, self)
 	_bus.game_started.connect(_on_game_started)
+	if _bus.has_signal("game_resumed") and not _bus.game_resumed.is_connected(_on_game_resumed):
+		_bus.game_resumed.connect(_on_game_resumed)
 	if _game.state != GameManager.State.IDLE:
-		_game.reset()   # coming back from a previous level / Home
+		_game.reset()
 	_refresh_region()
 	hud.show_title("LEVEL %d" % level.level_number, title_time)
 	if level.hint != "":
 		hud.show_hint(level.hint, 5.0)
 
-	# Pipeline & shader warm-up behind the loading screen curtain
+	# 8. Warm-up GPU shaders and particles behind loading curtain
+	_log("warming up particles...")
 	if dracula.smoke:
 		dracula.smoke.emitting = true
 		dracula.smoke.emitting = false
@@ -230,27 +379,50 @@ func _setup() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	# 9. Signal readiness so SceneManager fades out curtain
+	_log("level_ready emitting!")
 	_is_level_ready = true
 	level_ready.emit()
 	start()
 
 func start() -> void:
+	_log("start() called -> entering INTRO")
 	super.start()
-	_game.start()   # → GameBus.game_started → _on_game_started
+	_game.start()
+
+	# 10. Start Intro Sequence
+	set_state(LevelState.INTRO)
+	if level.goal and run_camera:
+		var on_intro_done := func() -> void:
+			_log("intro finished -> entering PLAYING")
+			set_state(LevelState.PLAYING)
+		run_camera.intro_finished.connect(on_intro_done, CONNECT_ONE_SHOT)
+		run_camera.play_intro(level.goal.global_position, dracula.global_position, _save, str(level.level_number))
+	else:
+		_log("no goal or camera -> entering PLAYING directly")
+		set_state(LevelState.PLAYING)
 
 func _on_game_started() -> void:
-	_running = true
-	dracula.activate()
-	sensor.set_active(true)
-	set_physics_process(true)
-	_bus.level_started.emit(str(level.level_number))
-	if _logger:
-		_logger.info("ShadowRun: level started", {"level": level.level_number})
+	_log("_on_game_started received from GameBus")
+	if state == LevelState.LOADING or state == LevelState.INTRO:
+		return
+	set_state(LevelState.PLAYING)
+
+func _on_game_resumed() -> void:
+	if state == LevelState.PAUSED:
+		set_state(LevelState.PLAYING)
 
 func _physics_process(delta: float) -> void:
-	if not _running:
+	if state != LevelState.PLAYING or not _running:
 		return
 	_clock += delta
+
+	# Exposure grace period at level start suppresses early sun burn
+	if _exposure_grace_timer > 0.0:
+		_exposure_grace_timer -= delta
+		if sensor:
+			sensor.reset()
+
 	dracula.set_burn_state(sensor.exposure, sensor.exposure_fraction)
 	if _finger == NO_FINGER:
 		return
@@ -337,10 +509,14 @@ func _on_guard_blocked() -> void:
 
 func _on_sun_drag_started() -> void:
 	_sun_dragging = true
+	if run_camera:
+		run_camera.set_planning_active(true)
 	dracula.stop_at_next_waypoint()   # he stands still while the sun moves
 
 func _on_sun_drag_ended() -> void:
 	_sun_dragging = false
+	if run_camera:
+		run_camera.set_planning_active(false)
 	_drag_dest = Vector2i(-1, -1)     # a move-drag still held resumes once shade is exact
 	if sun_rig.is_settled():
 		_on_sun_settled()
@@ -355,19 +531,102 @@ func _unhandled_input(event: InputEvent) -> void:
 		request_pause()
 		get_viewport().set_input_as_handled()
 		return
-	if not _running or _finished:
-		return
 	# Ignore mouse<->touch emulation duplicates so one finger is one touch.
 	if event.device == InputEvent.DEVICE_ID_EMULATION:
 		return
+
+	# Intro intercept: any tap/click skips the intro and immediately begins PLAYING
+	if state == LevelState.INTRO or (run_camera and run_camera.is_intro_playing()):
+		if (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed) or \
+		   (event is InputEventMouseButton and (event as InputEventMouseButton).pressed):
+			_log("Input intercepted during INTRO -> skip_intro")
+			if run_camera:
+				run_camera.skip_intro()
+			set_state(LevelState.PLAYING)
+			get_viewport().set_input_as_handled()
+		return
+
+	if state != LevelState.PLAYING or not _running or _finished:
+		return
+
+	# Desktop mouse wheel zoom
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			if run_camera:
+				run_camera.zoom_delta(-0.6)
+			get_viewport().set_input_as_handled()
+			return
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+			if run_camera:
+				run_camera.zoom_delta(0.6)
+			get_viewport().set_input_as_handled()
+			return
+		elif mb.button_index == MOUSE_BUTTON_MIDDLE or mb.button_index == MOUSE_BUTTON_RIGHT:
+			_mouse_panning = mb.pressed
+			_mouse_pan_prev = mb.position
+			get_viewport().set_input_as_handled()
+			return
+
+	if event is InputEventMouseMotion and _mouse_panning:
+		var mm := event as InputEventMouseMotion
+		if run_camera:
+			run_camera.pan_by(mm.relative)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Multi-touch ScreenTouch & ScreenDrag
 	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
-		_on_finger(st.index, st.position, st.pressed)
+		if st.pressed:
+			if not hud.is_in_play_view(st.position):
+				return
+			_touches[st.index] = st.position
+			if _touches.size() >= 2:
+				_cancel_move_drag()
+				var keys: Array = _touches.keys()
+				var p1: Vector2 = _touches[keys[0]]
+				var p2: Vector2 = _touches[keys[1]]
+				_last_pinch_dist = p1.distance_to(p2)
+				_last_pinch_mid = (p1 + p2) * 0.5
+				get_viewport().set_input_as_handled()
+				return
+			elif _touches.size() == 1:
+				_last_pinch_dist = -1.0
+				_on_finger(st.index, st.position, true)
+		else:
+			_touches.erase(st.index)
+			if _touches.size() < 2:
+				_last_pinch_dist = -1.0
+			if st.index == _finger:
+				_on_finger(st.index, st.position, false)
+
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		if _touches.has(sd.index):
+			_touches[sd.index] = sd.position
+		if _touches.size() >= 2:
+			var keys: Array = _touches.keys()
+			var p1: Vector2 = _touches[keys[0]]
+			var p2: Vector2 = _touches[keys[1]]
+			var cur_dist := p1.distance_to(p2)
+			var cur_mid := (p1 + p2) * 0.5
+			if _last_pinch_dist > 0.0 and run_camera:
+				var pinch_delta := (_last_pinch_dist - cur_dist) * 0.015
+				run_camera.zoom_delta(pinch_delta)
+				var pan_delta := cur_mid - _last_pinch_mid
+				run_camera.pan_by(pan_delta)
+			_last_pinch_dist = cur_dist
+			_last_pinch_mid = cur_mid
+			get_viewport().set_input_as_handled()
+			return
+		elif _touches.size() <= 1 and sd.index == _finger:
+			_on_finger_moved(sd.position)
+
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
 		_on_finger(-1, mb.position, mb.pressed)
-	elif event is InputEventScreenDrag and (event as InputEventScreenDrag).index == _finger:
-		_on_finger_moved((event as InputEventScreenDrag).position)
+
 	elif event is InputEventMouseMotion and _finger == -1:
 		_on_finger_moved((event as InputEventMouseMotion).position)
 
@@ -550,6 +809,8 @@ func _walk_cells(from: Vector2i, to: Vector2i, allow_hops: bool, run: bool) -> b
 	var smoothed := grid.smooth_path(dracula.global_position, cells, hops)
 	_path_points = smoothed.points
 	dracula.follow_path(_path_points, smoothed.hops, run)
+	if run_camera:
+		run_camera.notify_dracula_moving()
 	return true
 
 ## Walk to a world point if a shaded route exists; otherwise show the "no" cue.
@@ -611,8 +872,9 @@ func region_mask() -> PackedByteArray:
 	return _region
 
 func _on_goal_reached() -> void:
-	if _finished or not _running:
+	if state != LevelState.PLAYING or _finished or not _running:
 		return
+	set_state(LevelState.WON)
 	_finished = true
 	_running = false
 	_cancel_move_drag()
@@ -623,7 +885,6 @@ func _on_goal_reached() -> void:
 		_save.complete_level(level.level_number, 3, 100)
 		_save.save_game()
 	_game.game_over("level_complete")   # → GameBus.game_over("level_complete")
-	_bus.level_completed.emit(str(level.level_number))
 	if _logger:
 		_logger.info("ShadowRun: level complete", {"level": level.level_number})
 	var next_scene := ""
@@ -647,8 +908,9 @@ func _on_exposure_changed(value: float) -> void:
 	_bus.sun_exposure_changed.emit(value)
 
 func _on_burned_out() -> void:
-	if not _running:
+	if state != LevelState.PLAYING or not _running:
 		return
+	set_state(LevelState.DEAD)
 	_running = false
 	_cancel_move_drag()
 	sensor.set_active(false)
@@ -680,9 +942,10 @@ func _on_death_finished(cause: String) -> void:
 # ── Pause ─────────────────────────────────────────────────────────────────
 
 func request_pause() -> void:
-	if not _running or _finished or _leaving or not _game.is_playing():
+	if state != LevelState.PLAYING or not _running or _finished or _leaving or not _game.is_playing():
 		return
 	_cancel_move_drag()   # the release would arrive while paused and be lost
+	set_state(LevelState.PAUSED)
 	_game.pause()   # tree paused → all gameplay nodes stop processing
 	_ui.push_packed(pause_panel)
 	var panel := _ui.current() as PausePanel
@@ -705,6 +968,7 @@ func _leave(scene_path: String) -> void:
 	if _leaving:
 		return
 	_leaving = true
+	set_state(LevelState.LOADING)
 	if _game.state == GameManager.State.PAUSED:
 		_game.resume()   # must unpause before changing scenes
 	_game.reset()

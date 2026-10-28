@@ -76,10 +76,14 @@ func pop_to_root() -> void:
 	while _stack.size() > 1:
 		pop()
 
-## Clears all screens from the stack.
+## Clears all screens from the stack and frees them immediately.
 func clear_all() -> void:
-	while not _stack.is_empty():
-		pop()
+	for child in get_children():
+		if is_instance_valid(child):
+			if child is CanvasItem:
+				child.hide()
+			child.queue_free()
+	_stack.clear()
 
 func replace_packed(packed: PackedScene) -> void:
 	pop()

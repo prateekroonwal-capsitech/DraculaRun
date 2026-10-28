@@ -113,6 +113,7 @@ func show_title(text: String, seconds: float) -> void:
 	if _title_tween:
 		_title_tween.kill()
 	_title_tween = create_tween()
+	_title_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_title_tween.tween_interval(seconds)
 	_title_tween.tween_property(_title, "modulate:a", 0.0, 0.4)
 	_title_tween.tween_callback(_title.hide)
@@ -122,6 +123,7 @@ func show_hint(text: String, seconds: float = 3.5) -> void:
 	if _hint_tween:
 		_hint_tween.kill()
 	_hint_tween = create_tween()
+	_hint_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_hint_tween.tween_property(_hint, "modulate:a", 1.0, 0.25)
 	_hint_tween.tween_interval(seconds)
 	_hint_tween.tween_property(_hint, "modulate:a", 0.0, 0.4)
