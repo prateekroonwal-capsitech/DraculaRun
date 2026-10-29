@@ -21,6 +21,7 @@ var scene: SceneManager
 var ui: UIManager
 
 func _ready() -> void:
+	get_tree().set_auto_accept_quit(false)
 	# Persist composition root across scene transitions
 	if get_parent() != get_tree().root:
 		reparent.call_deferred(get_tree().root)
@@ -76,7 +77,9 @@ func _ready() -> void:
 	
 	ui = UIManager.new()
 	ui.name = "UIManager"
-	ui.configure(logger, bus, audio, game)
+	ui.layer = 100
+	ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	ui.configure(logger, bus, audio, game, save)
 	add_child(ui)
 	
 	_register_services()

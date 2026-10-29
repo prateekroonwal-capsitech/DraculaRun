@@ -79,6 +79,9 @@ func set_level_title(title: String, number: int) -> void:
 func is_in_play_view(viewport_pos: Vector2) -> bool:
 	return _play_view.get_global_rect().has_point(viewport_pos) and not active_sun_input().contains(viewport_pos)
 
+func get_play_view_rect() -> Rect2:
+	return _play_view.get_global_rect() if _play_view else get_viewport().get_visible_rect()
+
 func get_joystick() -> SunJoystick:
 	return _joystick
 

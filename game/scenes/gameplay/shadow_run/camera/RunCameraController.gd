@@ -4,7 +4,7 @@ extends Camera3D
 ## RunCameraController — Angled follow camera for Shadow Run (portrait).
 ## Features:
 ##   1. Lower, closer default view (~45° pitch, KEEP_WIDTH aspect, framing Dracula in lower-middle).
-##   2. Two-finger pinch to zoom & two-finger drag to pan across the level with auto-return.
+##   2. Two-finger pinch to zoom.
 ##   3. Planning view: smoothly pulls back and up while adjusting the sun.
 ##   4. Level intro: frames the Goal, holds, then smoothly pans across to Dracula.
 ##   5. Occlusion fade: dynamically fades obstacles between camera and Dracula.
@@ -13,7 +13,6 @@ signal intro_finished
 
 enum Mode {
 	FOLLOW,
-	MANUAL,
 	PLANNING,
 	INTRO,
 	DEATH
@@ -33,25 +32,29 @@ enum Mode {
 ## Forward smoothing.
 @export var forward_smoothing: float = 14.0
 
-@export_group("Pinch & Pan")
+@export_group("Downward Framing & Lookahead")
+## Extra forward (+Z) camera look-ahead offset when moving toward the bottom of the screen (meters).
+@export var downward_lookahead: float = 3.6
+## Smoothing speed for engaging / disengaging look-ahead.
+@export var lookahead_smoothing: float = 3.5
+## Deadzone in meters: movements smaller than this don't nudge the camera.
+@export var follow_dead_zone: float = 0.04
+
+@export_group("Pinch & Zoom")
 ## Minimum zoom distance.
 @export var min_distance: float = 3.5
 ## Maximum zoom distance.
 @export var max_distance: float = 12.0
-## Idle time before manual pan/zoom eases back to following Dracula (seconds).
-@export var pan_idle_timeout: float = 2.0
-## Time taken to smoothly ease back to following Dracula (seconds).
-@export var return_to_follow_time: float = 0.5
-## Screen-to-world pan speed multiplier.
-@export var pan_speed: float = 0.014
 
 @export_group("Planning View")
+## Enable camera pull-back planning view while adjusting the sun (disabled by default).
+@export var enable_planning_view: bool = false
 ## Extra distance behind Dracula when pulling back for sun adjustment.
-@export var planning_extra_distance: float = 3.5
+@export var planning_extra_distance: float = 0.0
 ## Extra height when pulling back for sun adjustment.
-@export var planning_extra_height: float = 2.5
+@export var planning_extra_height: float = 0.0
 ## Extra pitch in degrees when pulling back for sun adjustment.
-@export var planning_extra_pitch: float = 6.0
+@export var planning_extra_pitch: float = 0.0
 ## Ease time in/out of planning view (seconds).
 @export var planning_ease_time: float = 0.4
 
@@ -80,7 +83,6 @@ enum Mode {
 # ── State ──────────────────────────────────────────────────────────────────
 var _target: Node3D = null
 var _mode: Mode = Mode.FOLLOW
-var _bounds: Rect2 = Rect2(-15.0, -80.0, 30.0, 100.0)
 
 ## Level centre line world X.
 var center_x: float = 0.0
@@ -97,10 +99,10 @@ var _cur_pitch: float = 45.0
 # Focus point on the ground (XZ)
 var _focus_pos: Vector3 = Vector3.ZERO
 var _target_focus_pos: Vector3 = Vector3.ZERO
+var _cur_lookahead: float = 0.0
+var _prev_target_pos: Vector3 = Vector3.ZERO
 
-# Manual pan/zoom tracking
-var _manual_idle_timer: float = 0.0
-var _return_tween: Tween = null
+# Tween tracking
 var _planning_tween: Tween = null
 var _intro_tween: Tween = null
 var _is_planning_active: bool = false
@@ -151,16 +153,13 @@ func apply_level_overrides(pitch: float, dist: float, h: float) -> void:
 	_cur_height = height
 	_cur_pitch = pitch_degrees
 
-func set_bounds(bounds: Rect2) -> void:
-	_bounds = bounds
-
 # ── Follow API ────────────────────────────────────────────────────
 
 func follow(target: Node3D) -> void:
 	_target = target
 	var tp := target.global_position
 	var target_x := center_x + (tp.x - center_x) * lateral_follow
-	if _mode != Mode.INTRO and _mode != Mode.MANUAL:
+	if _mode != Mode.INTRO:
 		_focus_pos = Vector3(target_x, 0.0, tp.z)
 	_apply()
 	set_physics_process(true)
@@ -251,6 +250,9 @@ func is_intro_playing() -> bool:
 # ── Planning View API ─────────────────────────────────────────────────────
 
 func set_planning_active(active: bool) -> void:
+	if not enable_planning_view:
+		_is_planning_active = false
+		return
 	if _mode == Mode.DEATH or _mode == Mode.INTRO:
 		return
 	_is_planning_active = active
@@ -272,33 +274,13 @@ func set_planning_active(active: bool) -> void:
 
 	set_physics_process(true)
 
-# ── Manual Pinch & Pan API ────────────────────────────────────────────────
-
-func pan_by(delta_screen: Vector2) -> void:
-	if _mode == Mode.DEATH or _mode == Mode.INTRO:
-		return
-	_mode = Mode.MANUAL
-	_manual_idle_timer = pan_idle_timeout
-
-	if _return_tween and _return_tween.is_valid():
-		_return_tween.kill()
-		_return_tween = null
-
-	var sin_pitch := maxf(0.3, sin(deg_to_rad(_cur_pitch)))
-	var dx := delta_screen.x * pan_speed * (_cur_height / 9.5)
-	var dz := delta_screen.y * pan_speed * (_cur_height / 9.5) / sin_pitch
-
-	_focus_pos.x = clampf(_focus_pos.x - dx, _bounds.position.x, _bounds.position.x + _bounds.size.x)
-	_focus_pos.z = clampf(_focus_pos.z - dz, _bounds.position.y, _bounds.position.y + _bounds.size.y)
-	_apply()
-	set_physics_process(true)
+# ── Pinch & Zoom API ───────────────────────────────────────────────────────
 
 func zoom_delta(delta: float) -> void:
 	if _mode == Mode.DEATH or _mode == Mode.INTRO:
 		return
 	_base_distance = clampf(_base_distance + delta, min_distance, max_distance)
 	_cur_distance = clampf(_cur_distance + delta, min_distance, max_distance)
-	_manual_idle_timer = pan_idle_timeout
 	_apply()
 	set_physics_process(true)
 
@@ -310,29 +292,7 @@ func zoom_by(factor: float) -> void:
 	zoom_delta(diff)
 
 func notify_dracula_moving() -> void:
-	if _mode == Mode.MANUAL:
-		_ease_back_to_follow()
-
-func _ease_back_to_follow() -> void:
-	if _mode != Mode.MANUAL or _target == null:
-		return
-	_manual_idle_timer = 0.0
-	if _return_tween and _return_tween.is_valid():
-		return
-
-	var target_x := center_x + (_target.global_position.x - center_x) * lateral_follow
-	var target_z := _target.global_position.z
-
-	_return_tween = create_tween().set_parallel(true)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_OUT)
-
-	_return_tween.tween_property(self, "_focus_pos:x", target_x, return_to_follow_time)
-	_return_tween.tween_property(self, "_focus_pos:z", target_z, return_to_follow_time)
-	_return_tween.chain().tween_callback(func() -> void:
-		_mode = Mode.FOLLOW
-		_return_tween = null
-	)
+	pass
 
 # ── Death cam & Shake ─────────────────────────────────────────────────────
 
@@ -359,16 +319,30 @@ func _physics_process(delta: float) -> void:
 			if _target:
 				var tp := _target.global_position
 				var tx := center_x + (tp.x - center_x) * lateral_follow
-				_focus_pos.x = lerpf(_focus_pos.x, tx, minf(1.0, lateral_smoothing * delta))
-				_focus_pos.z = lerpf(_focus_pos.z, tp.z, minf(1.0, forward_smoothing * delta))
-				_apply()
 
-		Mode.MANUAL:
-			if _manual_idle_timer > 0.0:
-				_manual_idle_timer -= delta
-				if _manual_idle_timer <= 0.0:
-					_ease_back_to_follow()
-			_apply()
+				# Detect downward movement (+Z in world coordinates, toward bottom of screen)
+				var moving_down := false
+				if _target is CharacterBody3D:
+					moving_down = (_target as CharacterBody3D).velocity.z > 0.15
+				else:
+					moving_down = (tp.z - _prev_target_pos.z) > 0.003
+				_prev_target_pos = tp
+
+				var target_lookahead := downward_lookahead if moving_down else 0.0
+				_cur_lookahead = lerpf(_cur_lookahead, target_lookahead, 1.0 - exp(-lookahead_smoothing * delta))
+
+				var target_z := tp.z + _cur_lookahead
+
+				# Apply deadzone and critically damped exponential smoothing
+				if absf(target_z - _focus_pos.z) > follow_dead_zone:
+					var tz_decay := 1.0 - exp(-forward_smoothing * delta)
+					_focus_pos.z = lerpf(_focus_pos.z, target_z, tz_decay)
+
+				if absf(tx - _focus_pos.x) > follow_dead_zone:
+					var tx_decay := 1.0 - exp(-lateral_smoothing * delta)
+					_focus_pos.x = lerpf(_focus_pos.x, tx, tx_decay)
+
+				_apply()
 
 		Mode.INTRO:
 			_apply()
