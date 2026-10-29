@@ -23,12 +23,18 @@ extends Node3D
 @export var locomotion_blend_time: float = 0.2
 ## Never play slower than this when moving above walk speed (keeps the stride lively).
 @export var min_time_scale: float = 0.5
+## Speed threshold for Run animation (m/s). Below this, hysteresis timer checks before dropping to Walk/Idle.
+@export var run_threshold_speed: float = 2.0
+## Hysteresis delay (seconds): speed must stay below run_threshold_speed for this long before dropping from Run to Walk/Idle.
+@export var run_drop_delay: float = 0.2
 
 const _P_LOCO := &"parameters/Locomotion/blend_position"
 const _P_SPEED := &"parameters/Speed/scale"
 
 var _target_speed: float = 0.0
 var _speed: float = 0.0
+var _below_run_timer: float = 0.0
+var _was_running: bool = false
 
 func _ready() -> void:
 	animation_tree.active = true
@@ -38,18 +44,33 @@ func _ready() -> void:
 ## Called by DraculaController every physics frame: real ground speed (m/s).
 func set_motion(speed: float) -> void:
 	_target_speed = maxf(0.0, speed)
-	if not is_processing() and not is_equal_approx(_target_speed, _speed):
+	if not is_processing() and (not is_equal_approx(_target_speed, _speed) or _was_running):
 		set_process(true)
 
 ## Snap straight to Idle (level start, death).
 func reset_to_idle() -> void:
 	_target_speed = 0.0
 	_speed = 0.0
+	_was_running = false
+	_below_run_timer = run_drop_delay
 	_apply()
 
 func _process(delta: float) -> void:
-	_speed = lerpf(_speed, _target_speed, 1.0 - exp(-delta / maxf(0.01, locomotion_blend_time)))
-	if absf(_speed - _target_speed) < 0.01:
+	# Animation hysteresis: don't drop from Run to Walk/Idle during short speed dips
+	if _target_speed >= run_threshold_speed:
+		_was_running = true
+		_below_run_timer = 0.0
+	elif _was_running:
+		_below_run_timer += delta
+		if _below_run_timer >= run_drop_delay:
+			_was_running = false
+
+	var effective_target := _target_speed
+	if _was_running and effective_target < run_threshold_speed:
+		effective_target = run_threshold_speed
+
+	_speed = lerpf(_speed, effective_target, 1.0 - exp(-delta / maxf(0.01, locomotion_blend_time)))
+	if absf(_speed - _target_speed) < 0.01 and not _was_running:
 		_speed = _target_speed
 		set_process(false)
 	_apply()

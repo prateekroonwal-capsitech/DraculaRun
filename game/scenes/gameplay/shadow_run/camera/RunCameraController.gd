@@ -3,11 +3,14 @@ extends Camera3D
 
 ## RunCameraController — Angled follow camera for Shadow Run (portrait).
 ## Features:
-##   1. Lower, closer default view (~45° pitch, KEEP_WIDTH aspect, framing Dracula in lower-middle).
-##   2. Two-finger pinch to zoom.
-##   3. Planning view: smoothly pulls back and up while adjusting the sun.
-##   4. Level intro: frames the Goal, holds, then smoothly pans across to Dracula.
-##   5. Occlusion fade: dynamically fades obstacles between camera and Dracula.
+##   1. Analytical screen-space follow: frames Dracula inside a guaranteed safe box.
+##   2. Soft zone before hard clamp: raises follow speed smoothly as Dracula enters margin.
+##   3. Safe box hard clamp: mathematical guarantee that Dracula never leaves screen in any direction.
+##   4. Level bounds clamp with safe-box priority: respects level bounds unless Dracula would leave screen.
+##   5. Two-finger pinch to zoom.
+##   6. Planning view: smoothly pulls back and up while adjusting the sun.
+##   7. Level intro: frames the Goal, holds, then smoothly pans across to Dracula.
+##   8. Occlusion fade: dynamically fades obstacles between camera and Dracula.
 
 signal intro_finished
 
@@ -18,27 +21,47 @@ enum Mode {
 	DEATH
 }
 
-@export_group("Framing & Follow")
+@export_group("Framing & Safe Box")
 ## Camera height above the ground, meters.
 @export var height: float = 9.5
 ## Distance behind the target along +Z, meters.
 @export var distance: float = 5.2
 ## Downward pitch in degrees (40.0–50.0). Default 45.0.
 @export_range(40.0, 50.0) var pitch_degrees: float = 45.0
-## How much of the target's sideways offset (from center_x) the camera follows (0 = locked).
-@export_range(0.0, 1.0) var lateral_follow: float = 0.35
-## Lateral smoothing (higher = snappier) when lateral_follow > 0.
-@export var lateral_smoothing: float = 8.0
-## Forward smoothing.
-@export var forward_smoothing: float = 14.0
+## Default screen-space anchor X fraction of play view (0.50 = center).
+@export_range(0.0, 1.0) var base_anchor_x: float = 0.50
+## Default screen-space anchor Y fraction of play view (0.60 = lower-middle, more view ahead).
+@export_range(0.0, 1.0) var base_anchor_y: float = 0.60
+## Safe box horizontal margin fraction of play view (default 0.15 = 15%).
+@export_range(0.05, 0.30) var safe_box_margin_h: float = 0.15
+## Safe box vertical margin fraction of play view (default 0.15 = 15%).
+@export_range(0.05, 0.30) var safe_box_margin_v: float = 0.15
+## Soft margin inside safe box (~8% of play view) for smooth follow speed boost.
+@export_range(0.02, 0.15) var soft_zone_margin: float = 0.08
 
-@export_group("Downward Framing & Lookahead")
-## Extra forward (+Z) camera look-ahead offset when moving toward the bottom of the screen (meters).
-@export var downward_lookahead: float = 3.6
-## Smoothing speed for engaging / disengaging look-ahead.
-@export var lookahead_smoothing: float = 3.5
+@export_group("Follow Speed & Smoothing")
+## Base follow speed (1/s) when idling or walking.
+@export var base_follow_speed: float = 8.0
+## Follow speed (1/s) when Dracula is running.
+@export var run_follow_speed: float = 14.0
+## Maximum boosted follow speed (1/s) when Dracula penetrates deep into the soft zone.
+@export var max_boosted_follow_speed: float = 36.0
+## How much of target's sideways offset camera follows (1.0 = full lateral follow).
+@export_range(0.0, 1.0) var lateral_follow: float = 1.0
 ## Deadzone in meters: movements smaller than this don't nudge the camera.
 @export var follow_dead_zone: float = 0.04
+
+@export_group("Screen-space Lookahead")
+## Max screen-space lookahead offset fraction horizontally.
+@export_range(0.0, 0.20) var lookahead_max_screen_x: float = 0.10
+## Max screen-space lookahead offset fraction vertically.
+@export_range(0.0, 0.20) var lookahead_max_screen_y: float = 0.10
+## Smoothing speed for engaging / disengaging look-ahead (1/s).
+@export var lookahead_smoothing: float = 4.0
+
+@export_group("Level Bounds")
+## Clamp camera to level bounds (rect in XZ plane). Safe box always wins!
+@export var enable_level_bounds: bool = true
 
 @export_group("Pinch & Zoom")
 ## Minimum zoom distance.
@@ -86,6 +109,10 @@ var _mode: Mode = Mode.FOLLOW
 
 ## Level centre line world X.
 var center_x: float = 0.0
+## Level bounding box in world XZ ground plane.
+var level_bounds: Rect2 = Rect2()
+## Optional reference to HUD for exact play view rect.
+var hud: Node = null
 
 # Current active parameters
 var _base_distance: float = 5.2
@@ -98,9 +125,20 @@ var _cur_pitch: float = 45.0
 
 # Focus point on the ground (XZ)
 var _focus_pos: Vector3 = Vector3.ZERO
-var _target_focus_pos: Vector3 = Vector3.ZERO
-var _cur_lookahead: float = 0.0
+var _cam_world_pos: Vector3 = Vector3.ZERO
+var _cur_la_offset_x: float = 0.0
+var _cur_la_offset_y: float = 0.0
 var _prev_target_pos: Vector3 = Vector3.ZERO
+
+# Debug metrics exposed for overlays / tests
+var debug_screen_pos: Vector2 = Vector2.ZERO
+var debug_screen_pct: Vector2 = Vector2.ZERO
+var debug_soft_depth: float = 0.0
+var debug_hard_clamp: bool = false
+var debug_effective_speed: float = 0.0
+var debug_safe_rect: Rect2 = Rect2()
+var debug_soft_rect: Rect2 = Rect2()
+var debug_target_anchor: Vector2 = Vector2.ZERO
 
 # Tween tracking
 var _planning_tween: Tween = null
@@ -124,6 +162,7 @@ func _log(msg: String) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_priority = 100 # Late update: runs after Dracula and scene updates
 	keep_aspect = Camera3D.KEEP_WIDTH
 	fov = 40.0
 	_base_distance = distance
@@ -135,7 +174,93 @@ func _ready() -> void:
 	_ray_query = PhysicsRayQueryParameters3D.new()
 	# Mask 12: Layer 3 (obstacle, 4) | Layer 4 (shadow_caster, 8)
 	_ray_query.collision_mask = 12
+	set_process(true)
 	set_physics_process(false)
+
+# ── Screen & Projection Math ───────────────────────────────────────────────
+
+func get_play_view_rect() -> Rect2:
+	if hud != null and is_instance_valid(hud) and hud.has_method("get_play_view_rect"):
+		var r: Rect2 = hud.get_play_view_rect()
+		if r.size.x > 0.0 and r.size.y > 0.0:
+			return r
+	var vp := get_viewport()
+	if vp:
+		return vp.get_visible_rect()
+	return Rect2(0.0, 0.0, 1080.0, 1920.0)
+
+## Closed-form inverse camera placement: computes exact camera 3D position
+## placing a world point on the ground (y=0) at screen pixel coordinate (target_sx, target_sy).
+func camera_pos_for_screen_target(drac_pos: Vector3, target_sx: float, target_sy: float, cam_height: float, pitch_r: float) -> Vector3:
+	var vp_rect := get_viewport().get_visible_rect()
+	var vp_w := vp_rect.size.x
+	var vp_h := vp_rect.size.y
+	if vp_w <= 0.0 or vp_h <= 0.0:
+		vp_w = 1080.0
+		vp_h = 1920.0
+
+	var aspect_ratio := vp_w / vp_h
+	var hfov_rad := deg_to_rad(fov)
+	var vfov_rad := 2.0 * atan(tan(hfov_rad * 0.5) / aspect_ratio)
+
+	var tan_h := tan(hfov_rad * 0.5)
+	var tan_v := tan(vfov_rad * 0.5)
+
+	var cos_t := cos(pitch_r)
+	var sin_t := sin(pitch_r)
+
+	var ndc_x := (2.0 * target_sx - vp_w) / vp_w
+	var ndc_y := (vp_h - 2.0 * target_sy) / vp_h
+
+	var kx := ndc_x * tan_h
+	var ky := ndc_y * tan_v
+
+	var denom := sin_t - ky * cos_t
+	if absf(denom) < 0.0001:
+		denom = 0.0001
+
+	var delta_z := -cam_height * (cos_t + ky * sin_t) / denom
+	var z_depth := cam_height * sin_t - delta_z * cos_t
+
+	var cam_x := drac_pos.x - kx * z_depth
+	var cam_z := drac_pos.z - delta_z
+	var cam_y := cam_height
+
+	return Vector3(cam_x, cam_y, cam_z)
+
+## Projects a 3D ground point to screen viewport pixels given camera position and pitch.
+func project_to_screen(cam_pos: Vector3, point_3d: Vector3, pitch_r: float) -> Vector2:
+	var vp_rect := get_viewport().get_visible_rect()
+	var vp_w := vp_rect.size.x
+	var vp_h := vp_rect.size.y
+	if vp_w <= 0.0 or vp_h <= 0.0:
+		vp_w = 1080.0
+		vp_h = 1920.0
+
+	var aspect_ratio := vp_w / vp_h
+	var hfov_rad := deg_to_rad(fov)
+	var vfov_rad := 2.0 * atan(tan(hfov_rad * 0.5) / aspect_ratio)
+
+	var tan_h := tan(hfov_rad * 0.5)
+	var tan_v := tan(vfov_rad * 0.5)
+
+	var cos_t := cos(pitch_r)
+	var sin_t := sin(pitch_r)
+
+	var rel := point_3d - cam_pos
+	var vx := rel.x
+	var vy := rel.y * cos_t - rel.z * sin_t
+	var vz := rel.y * sin_t + rel.z * cos_t
+	var z_depth := -vz
+	if z_depth <= 0.001:
+		return Vector2(-9999.0, -9999.0)
+
+	var ndc_x := (vx / z_depth) / tan_h
+	var ndc_y := (vy / z_depth) / tan_v
+
+	var sx := (ndc_x + 1.0) * 0.5 * vp_w
+	var sy := (1.0 - ndc_y) * 0.5 * vp_h
+	return Vector2(sx, sy)
 
 # ── Level configuration ───────────────────────────────────────────────────
 
@@ -157,16 +282,26 @@ func apply_level_overrides(pitch: float, dist: float, h: float) -> void:
 
 func follow(target: Node3D) -> void:
 	_target = target
-	var tp := target.global_position
-	var target_x := center_x + (tp.x - center_x) * lateral_follow
-	if _mode != Mode.INTRO:
-		_focus_pos = Vector3(target_x, 0.0, tp.z)
+	var tp := _get_target_pos()
+	_prev_target_pos = tp
+	var play_rect := get_play_view_rect()
+	var init_anchor_x := play_rect.position.x + play_rect.size.x * base_anchor_x
+	var init_anchor_y := play_rect.position.y + play_rect.size.y * base_anchor_y
+	var init_cam := camera_pos_for_screen_target(tp, init_anchor_x, init_anchor_y, _cur_height, deg_to_rad(_cur_pitch))
+	_cam_world_pos = init_cam
+	_focus_pos = Vector3(init_cam.x, 0.0, init_cam.z - _cur_distance)
 	_apply()
-	set_physics_process(true)
+	set_process(true)
 
 func stop_follow() -> void:
 	_target = null
 	_check_idle()
+
+func _get_target_pos() -> Vector3:
+	if _target == null:
+		return Vector3.ZERO
+	# Use physics-interpolated global transform origin for smooth 60/120Hz tracking
+	return _target.get_global_transform_interpolated().origin
 
 # ── Level Intro API ───────────────────────────────────────────────────────
 
@@ -181,23 +316,35 @@ func play_intro(goal_pos: Vector3, start_pos: Vector3, save_mgr: SaveManager = n
 		if save_mgr.get_custom_data(seen_key, false) == true:
 			_log("intro already seen, skipping to Dracula")
 			_mode = Mode.FOLLOW
-			_focus_pos = Vector3(center_x, 0.0, start_pos.z)
+			var play_rect := get_play_view_rect()
+			var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
+			var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
+			var c := camera_pos_for_screen_target(start_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
+			_cam_world_pos = c
+			_focus_pos = Vector3(c.x, 0.0, c.z - _cur_distance)
 			_apply()
 			_intro_ended = true
 			intro_finished.emit()
 			return
 
 	_mode = Mode.INTRO
-	set_physics_process(true)
+	set_process(true)
 
 	if _intro_tween and _intro_tween.is_valid():
 		_intro_tween.kill()
 
 	# Start framing the Goal
-	_focus_pos = Vector3(center_x, 0.0, goal_pos.z)
+	var play_rect := get_play_view_rect()
+	var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
+	var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
+	var goal_cam := camera_pos_for_screen_target(goal_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
+	var start_cam := camera_pos_for_screen_target(start_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
+
+	_cam_world_pos = goal_cam
+	_focus_pos = Vector3(goal_cam.x, 0.0, goal_cam.z - _cur_distance)
 	_apply()
 
-	# Safety watchdog timer: guarantees intro ends even if tween is interrupted or fails
+	# Safety watchdog timer
 	var timeout: float = intro_hold_time + intro_pan_time + 1.0
 	get_tree().create_timer(timeout, false, false, true).timeout.connect(func() -> void:
 		if _mode == Mode.INTRO and not _intro_ended:
@@ -206,15 +353,15 @@ func play_intro(goal_pos: Vector3, start_pos: Vector3, save_mgr: SaveManager = n
 	)
 
 	_intro_tween = create_tween()
-	_intro_tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	_intro_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_intro_tween.tween_interval(intro_hold_time)
 	_intro_tween.tween_method(
 		func(val: float) -> void:
-			_focus_pos.z = val
+			_cam_world_pos.z = val
+			_focus_pos.z = val - _cur_distance
 			_apply(),
-		goal_pos.z,
-		start_pos.z,
+		goal_cam.z,
+		start_cam.z,
 		intro_pan_time
 	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
@@ -235,8 +382,13 @@ func _end_intro() -> void:
 		_intro_tween.kill()
 		_intro_tween = null
 	if _target:
-		_focus_pos.z = _target.global_position.z
-		_focus_pos.x = center_x + (_target.global_position.x - center_x) * lateral_follow
+		var tp := _get_target_pos()
+		var play_rect := get_play_view_rect()
+		var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
+		var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
+		var c := camera_pos_for_screen_target(tp, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
+		_cam_world_pos = c
+		_focus_pos = Vector3(c.x, 0.0, c.z - _cur_distance)
 	_apply()
 	if _save_mgr != null and _level_id != "":
 		_save_mgr.set_custom_data("intro_seen_level_" + _level_id, true)
@@ -272,7 +424,7 @@ func set_planning_active(active: bool) -> void:
 	_planning_tween.tween_property(self, "_cur_height", target_h, planning_ease_time)
 	_planning_tween.tween_property(self, "_cur_pitch", target_pitch, planning_ease_time)
 
-	set_physics_process(true)
+	set_process(true)
 
 # ── Pinch & Zoom API ───────────────────────────────────────────────────────
 
@@ -282,7 +434,7 @@ func zoom_delta(delta: float) -> void:
 	_base_distance = clampf(_base_distance + delta, min_distance, max_distance)
 	_cur_distance = clampf(_cur_distance + delta, min_distance, max_distance)
 	_apply()
-	set_physics_process(true)
+	set_process(true)
 
 func zoom_by(factor: float) -> void:
 	if _mode == Mode.DEATH or _mode == Mode.INTRO or absf(factor - 1.0) < 0.001:
@@ -304,45 +456,20 @@ func focus_death(duration: float = 1.5) -> void:
 	tw.tween_property(self, "_cur_height", death_height, duration)
 	tw.tween_property(self, "_cur_distance", death_distance, duration)
 	tw.tween_property(self, "_cur_pitch", death_pitch_degrees, duration)
-	set_physics_process(true)
+	set_process(true)
 
 func shake(strength: float, duration: float) -> void:
 	_shake_strength = strength
 	_shake_time = duration
-	set_physics_process(true)
+	set_process(true)
 
-# ── Physics Process & Occlusion ───────────────────────────────────────────
+# ── Process & Follow Updates ──────────────────────────────────────────────
 
-func _physics_process(delta: float) -> void:
+func _process(delta: float) -> void:
 	match _mode:
 		Mode.FOLLOW:
 			if _target:
-				var tp := _target.global_position
-				var tx := center_x + (tp.x - center_x) * lateral_follow
-
-				# Detect downward movement (+Z in world coordinates, toward bottom of screen)
-				var moving_down := false
-				if _target is CharacterBody3D:
-					moving_down = (_target as CharacterBody3D).velocity.z > 0.15
-				else:
-					moving_down = (tp.z - _prev_target_pos.z) > 0.003
-				_prev_target_pos = tp
-
-				var target_lookahead := downward_lookahead if moving_down else 0.0
-				_cur_lookahead = lerpf(_cur_lookahead, target_lookahead, 1.0 - exp(-lookahead_smoothing * delta))
-
-				var target_z := tp.z + _cur_lookahead
-
-				# Apply deadzone and critically damped exponential smoothing
-				if absf(target_z - _focus_pos.z) > follow_dead_zone:
-					var tz_decay := 1.0 - exp(-forward_smoothing * delta)
-					_focus_pos.z = lerpf(_focus_pos.z, target_z, tz_decay)
-
-				if absf(tx - _focus_pos.x) > follow_dead_zone:
-					var tx_decay := 1.0 - exp(-lateral_smoothing * delta)
-					_focus_pos.x = lerpf(_focus_pos.x, tx, tx_decay)
-
-				_apply()
+				_update_follow(delta)
 
 		Mode.INTRO:
 			_apply()
@@ -365,6 +492,131 @@ func _physics_process(delta: float) -> void:
 		_update_occlusion_fade()
 
 	_check_idle()
+
+func _update_follow(delta: float) -> void:
+	var tp := _get_target_pos()
+
+	# 1. Detect ground velocity
+	var move_vec := Vector2.ZERO
+	var current_speed := 0.0
+	if _target.has_method("get_ground_velocity"):
+		var gv: Vector3 = _target.get_ground_velocity()
+		move_vec = Vector2(gv.x, gv.z)
+		current_speed = move_vec.length()
+		if current_speed > 0.01:
+			move_vec = move_vec.normalized()
+
+	if current_speed < 0.01:
+		var delta_pos := tp - _prev_target_pos
+		var d2 := Vector2(delta_pos.x, delta_pos.z)
+		current_speed = d2.length() / maxf(delta, 0.0001)
+		if current_speed > 0.15:
+			move_vec = d2.normalized()
+
+	_prev_target_pos = tp
+
+	# 2. Compute screen layout (safe box, soft zone, anchor)
+	var play_rect := get_play_view_rect()
+	var S_min_x := play_rect.position.x + play_rect.size.x * safe_box_margin_h
+	var S_max_x := play_rect.end.x - play_rect.size.x * safe_box_margin_h
+	var S_min_y := play_rect.position.y + play_rect.size.y * safe_box_margin_v
+	var S_max_y := play_rect.end.y - play_rect.size.y * safe_box_margin_v
+
+	var soft_w := play_rect.size.x * soft_zone_margin
+	var soft_h := play_rect.size.y * soft_zone_margin
+	var Z_min_x := S_min_x + soft_w
+	var Z_max_x := S_max_x - soft_w
+	var Z_min_y := S_min_y + soft_h
+	var Z_max_y := S_max_y - soft_h
+
+	debug_safe_rect = Rect2(S_min_x, S_min_y, S_max_x - S_min_x, S_max_y - S_min_y)
+	debug_soft_rect = Rect2(Z_min_x, Z_min_y, Z_max_x - Z_min_x, Z_max_y - Z_min_y)
+
+	# 3. Screen-space lookahead
+	# Movement directions in world XZ map to screen space:
+	#   World -Z (UP on screen)    -> Shift anchor DOWN (larger screen Y) -> Reveals more room UP
+	#   World +Z (DOWN on screen)  -> Shift anchor UP (smaller screen Y)  -> Reveals more room DOWN
+	#   World +X (RIGHT on screen) -> Shift anchor LEFT (smaller screen X) -> Reveals more room RIGHT
+	#   World -X (LEFT on screen)  -> Shift anchor RIGHT (larger screen X) -> Reveals more room LEFT
+	var k_speed := clampf(current_speed / 8.0, 0.0, 1.0)
+	var tgt_la_x := -move_vec.x * (play_rect.size.x * lookahead_max_screen_x) * k_speed
+	var tgt_la_y := -move_vec.y * (play_rect.size.y * lookahead_max_screen_y) * k_speed
+
+	var la_decay := 1.0 - exp(-lookahead_smoothing * delta)
+	_cur_la_offset_x = lerpf(_cur_la_offset_x, tgt_la_x, la_decay)
+	_cur_la_offset_y = lerpf(_cur_la_offset_y, tgt_la_y, la_decay)
+
+	var target_anchor_x := play_rect.position.x + play_rect.size.x * base_anchor_x + _cur_la_offset_x
+	var target_anchor_y := play_rect.position.y + play_rect.size.y * base_anchor_y + _cur_la_offset_y
+
+	# User Addition 3: Cap screen-space lookahead so anchor NEVER exits safe box or enters soft zone
+	target_anchor_x = clampf(target_anchor_x, Z_min_x, Z_max_x)
+	target_anchor_y = clampf(target_anchor_y, Z_min_y, Z_max_y)
+	debug_target_anchor = Vector2(target_anchor_x, target_anchor_y)
+
+	# 4. Ideal camera position from screen anchor
+	var pitch_r := deg_to_rad(_cur_pitch)
+	var ideal_cam := camera_pos_for_screen_target(tp, target_anchor_x, target_anchor_y, _cur_height, pitch_r)
+
+	if lateral_follow < 0.99:
+		var center_cam := camera_pos_for_screen_target(Vector3(center_x, 0.0, tp.z), target_anchor_x, target_anchor_y, _cur_height, pitch_r)
+		ideal_cam.x = lerpf(center_cam.x, ideal_cam.x, lateral_follow)
+
+	# 5. Soft Zone speed boost (User Addition 1)
+	var cur_screen := project_to_screen(_cam_world_pos, tp, pitch_r)
+	var depth_x := 0.0
+	if cur_screen.x < Z_min_x:
+		depth_x = (Z_min_x - cur_screen.x) / maxf(soft_w, 1.0)
+	elif cur_screen.x > Z_max_x:
+		depth_x = (cur_screen.x - Z_max_x) / maxf(soft_w, 1.0)
+
+	var depth_y := 0.0
+	if cur_screen.y < Z_min_y:
+		depth_y = (Z_min_y - cur_screen.y) / maxf(soft_h, 1.0)
+	elif cur_screen.y > Z_max_y:
+		depth_y = (cur_screen.y - Z_max_y) / maxf(soft_h, 1.0)
+
+	var soft_depth := clampf(maxf(depth_x, depth_y), 0.0, 1.0)
+	debug_soft_depth = soft_depth
+
+	var active_speed := run_follow_speed if current_speed > 2.0 else base_follow_speed
+	var effective_speed := lerpf(active_speed, max_boosted_follow_speed, soft_depth * soft_depth)
+	debug_effective_speed = effective_speed
+
+	# 6. Smooth camera movement
+	var step_decay := 1.0 - exp(-effective_speed * delta)
+	if (_cam_world_pos - ideal_cam).length_squared() > follow_dead_zone * follow_dead_zone:
+		_cam_world_pos.x = lerpf(_cam_world_pos.x, ideal_cam.x, step_decay)
+		_cam_world_pos.z = lerpf(_cam_world_pos.z, ideal_cam.z, step_decay)
+	_cam_world_pos.y = _cur_height
+
+	# 7. Level bounds clamp (User Addition 2)
+	if enable_level_bounds and level_bounds.size.x > 0.0 and level_bounds.size.y > 0.0:
+		_cam_world_pos.x = clampf(_cam_world_pos.x, level_bounds.position.x, level_bounds.end.x)
+		_cam_world_pos.z = clampf(_cam_world_pos.z, level_bounds.position.y + _cur_distance, level_bounds.end.y + _cur_distance)
+
+	# 8. Hard Clamp Guarantee: Safe box ALWAYS wins!
+	var proj_screen := project_to_screen(_cam_world_pos, tp, pitch_r)
+	var clamped_sx := clampf(proj_screen.x, S_min_x, S_max_x)
+	var clamped_sy := clampf(proj_screen.y, S_min_y, S_max_y)
+	if absf(clamped_sx - proj_screen.x) > 0.01 or absf(clamped_sy - proj_screen.y) > 0.01:
+		debug_hard_clamp = true
+		var req_cam := camera_pos_for_screen_target(tp, clamped_sx, clamped_sy, _cur_height, pitch_r)
+		_cam_world_pos.x = req_cam.x
+		_cam_world_pos.z = req_cam.z
+		proj_screen = Vector2(clamped_sx, clamped_sy)
+	else:
+		debug_hard_clamp = false
+
+	# 9. Update state & apply
+	debug_screen_pos = proj_screen
+	var vp_size := get_viewport().get_visible_rect().size
+	if vp_size.x > 0.0 and vp_size.y > 0.0:
+		debug_screen_pct = Vector2((proj_screen.x / vp_size.x) * 100.0, (proj_screen.y / vp_size.y) * 100.0)
+
+	_focus_pos.x = _cam_world_pos.x
+	_focus_pos.z = _cam_world_pos.z - _cur_distance
+	_apply()
 
 func _apply() -> void:
 	global_position = Vector3(_focus_pos.x, _focus_pos.y + _cur_height, _focus_pos.z + _cur_distance)
@@ -424,4 +676,4 @@ func _find_mesh_in(node: Node) -> MeshInstance3D:
 
 func _check_idle() -> void:
 	if _target == null and _shake_time <= 0.0 and _mode == Mode.FOLLOW and not _is_planning_active:
-		set_physics_process(false)
+		set_process(false)

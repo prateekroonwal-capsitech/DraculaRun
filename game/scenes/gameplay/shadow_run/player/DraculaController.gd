@@ -99,6 +99,9 @@ var _exposure_rising: bool = false
 var _sizzle_timer: float = 0.0
 var _haptic_timer: float = 0.0
 var _cue_tween: Tween
+var _drag_active: bool = false
+var _drag_clamped_at_edge: bool = false
+var _ground_velocity: Vector3 = Vector3.ZERO
 
 func inject_services(registry: Node) -> void:
 	if not registry:
@@ -130,6 +133,12 @@ func is_dead_or_dying() -> bool:
 func is_moving() -> bool:
 	return _index < _points.size()
 
+func get_ground_velocity() -> Vector3:
+	return _ground_velocity
+
+func get_cur_speed() -> float:
+	return _cur_speed
+
 func get_sample_points() -> Array[Node3D]:
 	return sample_points
 
@@ -141,8 +150,21 @@ func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
 	_points.clear()
 	_index = 0
 	_cur_speed = 0.0
+	_ground_velocity = Vector3.ZERO
 	_turning_in_place = false
+	_drag_active = false
+	_drag_clamped_at_edge = false
 	body_visual.reset_to_idle()
+	reset_physics_interpolation()
+
+## Sets drag state and whether destination is clamped at a shadow edge.
+## Mid-drag in open shade, arrival deceleration is suppressed so he runs continuously.
+func set_drag_state(active: bool, clamped_at_edge: bool = false) -> void:
+	_drag_active = active
+	_drag_clamped_at_edge = clamped_at_edge
+
+func get_remaining_distance() -> float:
+	return _remaining_distance()
 
 ## Follow `points` (world positions, first = the first cell to step into).
 ## hops[i] = true makes the step into points[i] a hop. `run` forces run speed
@@ -246,6 +268,7 @@ func play_burn_death() -> void:
 func _move(delta: float) -> void:
 	velocity = Vector3.ZERO
 	if _state != State.ACTIVE:
+		_ground_velocity = Vector3.ZERO
 		return
 	_update_burn_pulses(delta)
 	var prev_pos := global_position
@@ -253,6 +276,7 @@ func _move(delta: float) -> void:
 	# Lock visual pitch and roll strictly to 0
 	visual.rotation.x = 0.0
 	visual.rotation.z = 0.0
+	_ground_velocity = (global_position - prev_pos) / maxf(delta, 0.0001)
 	# Animation: real ground speed (0 while turning in place → Idle; hops keep Run playing).
 	var ground := Vector2(global_position.x - prev_pos.x, global_position.z - prev_pos.z).length() / maxf(delta, 0.0001)
 	if is_moving() and _hops[_index] and _seg_travel > 0.0:
@@ -306,8 +330,15 @@ func _step_path(delta: float) -> void:
 		_finish_path()
 		return
 
-	var brake := sqrt(2.0 * acceleration * rem)
-	_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 0.5))
+	# Only apply arrival deceleration when finger is released or target is clamped at a shadow edge.
+	# Mid-drag through open shade, Dracula keeps running at full cruising speed.
+	var should_brake := (not _drag_active) or _drag_clamped_at_edge
+	if should_brake:
+		var brake := sqrt(2.0 * acceleration * rem)
+		_cur_speed = minf(move_toward(_cur_speed, _speed, acceleration * delta), maxf(brake, 0.5))
+	else:
+		_cur_speed = move_toward(_cur_speed, _speed, acceleration * delta)
+
 	var step := minf(_cur_speed * delta, rem)
 	global_position += steer_dir * step
 	global_position.y = _points[_index].y
@@ -338,6 +369,7 @@ func _finish_path() -> void:
 	_points.clear()
 	_index = 0
 	_cur_speed = 0.0
+	_ground_velocity = Vector3.ZERO
 	_turning_in_place = false
 	arrived.emit()
 

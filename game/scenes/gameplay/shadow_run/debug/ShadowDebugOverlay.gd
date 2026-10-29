@@ -79,12 +79,20 @@ func _process(_delta: float) -> void:
 		_cells_dirty = false
 		_draw_cells()
 	_draw_lines()
+	var cam_info := ""
+	if _feature != null and "run_camera" in _feature and _feature.run_camera != null:
+		var cam: RunCameraController = _feature.run_camera
+		cam_info = "cam: Dracula (%4.1f%%, %4.1f%%) | soft depth %.2f | clamp: %s | spd %4.1f" % [
+			cam.debug_screen_pct.x, cam.debug_screen_pct.y, cam.debug_soft_depth,
+			"HARD CLAMP" if cam.debug_hard_clamp else "ok", cam.debug_effective_speed
+		]
 	info_label.text = "\n".join([
 		"sun az %6.1f (target %6.1f)  el %4.1f" % [_sun.azimuth, _sun.target_azimuth, _sun.elevation],
 		"grid %dx%d @ %.2fm  variable %d" % [_grid.cols, _grid.rows, _grid.cell_size, _grid.variable_cell_count()],
 		"exposure %5.1f%%  lit points %d/%d" % [_sensor.exposure, roundi(_sensor.exposure_fraction * _sensor.debug_lit.size()), _sensor.debug_lit.size()],
 		"fps %d  nodes %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)],
 		"paths: white smoothed | [F4] raw grey: %s" % ["ON" if show_raw_path else "OFF"],
+		cam_info,
 	])
 
 func _draw_cells() -> void:

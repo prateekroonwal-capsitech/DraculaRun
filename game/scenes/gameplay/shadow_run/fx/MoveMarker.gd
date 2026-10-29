@@ -16,19 +16,24 @@ extends Node3D
 @export var start_scale: float = 0.35
 ## Drag mode: how quickly the held ring glides to a new target (1/s).
 @export var follow_rate: float = 30.0
+## Transparency in edge lead mode (0.0 = fully opaque, 1.0 = invisible).
+@export var edge_mode_transparency: float = 0.45
 
 var _tween: Tween
 var _target: Vector3
 var _holding: bool = false
+var _is_edge_mode: bool = false
 
 func _ready() -> void:
 	visible = false
+	process_priority = 0
 	set_process(false)
-	set_physics_process(false)   # PDF §4: tick only while gliding in drag mode
+	set_physics_process(false)
 
 func play_at(world: Vector3, ok: bool) -> void:
 	_holding = false
-	set_physics_process(false)
+	_is_edge_mode = false
+	set_process(false)
 	global_position = world + Vector3(0.0, 0.03, 0.0)
 	ring.material_override = ok_material if ok else fail_material
 	visible = true
@@ -41,31 +46,36 @@ func play_at(world: Vector3, ok: bool) -> void:
 	_tween.tween_callback(func() -> void: visible = false)
 
 ## Drag mode: show the ring steadily at `world` (gliding there if already shown).
-func hold_at(world: Vector3) -> void:
+## is_edge_mode: if true, fades the ring slightly to indicate a lead target ahead.
+func hold_at(world: Vector3, is_edge_mode: bool = false) -> void:
 	_target = world + Vector3(0.0, 0.03, 0.0)
+	_is_edge_mode = is_edge_mode
 	if not _holding:
 		_holding = true
 		_kill_tween()
 		global_position = _target
 		ring.material_override = ok_material
 		ring.scale = Vector3.ONE
-		ring.transparency = 0.0
+		ring.transparency = edge_mode_transparency if is_edge_mode else 0.0
 		visible = true
-		set_physics_process(true)
+		set_process(true)
 
 ## Drag cancelled (pause, death, goal): fade without a pulse.
 func fade_out() -> void:
 	if not _holding:
 		return
 	_holding = false
-	set_physics_process(false)
+	_is_edge_mode = false
+	set_process(false)
 	_kill_tween()
 	_tween = create_tween()
 	_tween.tween_property(ring, "transparency", 1.0, pulse_time * 0.5)
 	_tween.tween_callback(func() -> void: visible = false)
 
-func _physics_process(delta: float) -> void:
+func _process(delta: float) -> void:
 	global_position = global_position.lerp(_target, minf(1.0, follow_rate * delta))
+	var target_alpha := edge_mode_transparency if _is_edge_mode else 0.0
+	ring.transparency = lerpf(ring.transparency, target_alpha, minf(1.0, 12.0 * delta))
 
 func _kill_tween() -> void:
 	if _tween and _tween.is_valid():

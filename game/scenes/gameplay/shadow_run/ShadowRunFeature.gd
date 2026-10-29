@@ -126,8 +126,8 @@ func _state_name(s: LevelState) -> String:
 @export var drag_screen_deadzone: float = 8.0
 ## Screen margin fraction (~12%) for edge scrolling.
 @export var edge_scroll_margin_ratio: float = 0.12
-## Constant world speed when dragging in edge scroll zone (meters/sec).
-@export var edge_scroll_speed: float = 4.5
+## Lead distance ahead of Dracula while dragging in edge zones (meters).
+@export var edge_lead_distance: float = 2.5
 
 @export_group("Sun control")
 ## Used until the player picks a mode in the Pause panel (then the saved choice wins).
@@ -181,6 +181,15 @@ var _path_points: PackedVector3Array = PackedVector3Array()
 var _raw_path_points: PackedVector3Array = PackedVector3Array()
 var _touches: Dictionary = {}
 var _last_pinch_dist: float = -1.0
+var _queued_touch_events: Array[Dictionary] = []
+
+func _queue_touch_event(type: String, index: int, pos: Vector2) -> void:
+	if type == "MOVE" and not _queued_touch_events.is_empty():
+		var last: Dictionary = _queued_touch_events[-1]
+		if last.get("type") == "MOVE" and last.get("index") == index:
+			last["pos"] = pos
+			return
+	_queued_touch_events.append({"type": type, "index": index, "pos": pos})
 
 # ── Injection ─────────────────────────────────────────────────────────────
 
@@ -301,7 +310,10 @@ func _setup() -> void:
 	_apply_sun_mode(_load_sun_mode())
 
 	# 3. Configure camera overrides and follow
+	run_camera.hud = hud
 	run_camera.center_x = level.center_x()
+	if level:
+		run_camera.level_bounds = level.get_level_bounds()
 	run_camera.apply_level_overrides(level.camera_pitch, level.camera_distance, level.camera_height)
 	run_camera.follow(dracula)
 	run_camera.reset_physics_interpolation()
@@ -422,6 +434,21 @@ func _physics_process(delta: float) -> void:
 		return
 	_clock += delta
 
+	# Process queued touch events buffered from _unhandled_input (User Addition 4)
+	if not _queued_touch_events.is_empty():
+		var touch_batch := _queued_touch_events.duplicate()
+		_queued_touch_events.clear()
+		for ev in touch_batch:
+			match ev.get("type"):
+				"DOWN":
+					_on_finger(ev.index, ev.pos, true)
+				"MOVE":
+					if ev.index == _finger:
+						_on_finger_moved(ev.pos)
+				"UP":
+					if ev.index == _finger:
+						_on_finger(ev.index, ev.pos, false)
+
 	# Exposure grace period at level start suppresses early sun burn
 	if _exposure_grace_timer > 0.0:
 		_exposure_grace_timer -= delta
@@ -443,16 +470,12 @@ func _physics_process(delta: float) -> void:
 		_repath_wait = 1.0 / maxf(1.0, drag_repath_rate)
 		_drag_update()
 
-func _process_edge_scrolling(delta: float) -> void:
-	if _drag_world_pos == null or not is_instance_valid(level) or level.grid == null:
-		return
+func _get_edge_drag_direction() -> Vector3:
+	if not hud or not hud.is_in_play_view(_finger_pos):
+		return Vector3.ZERO
 	var rect: Rect2 = hud.get_play_view_rect() if hud else get_viewport().get_visible_rect()
 	var mx: float = rect.size.x * edge_scroll_margin_ratio
 	var my: float = rect.size.y * edge_scroll_margin_ratio
-
-	# Ignore edge scroll if finger is touching the sun joystick or outside play view
-	if hud and not hud.is_in_play_view(_finger_pos):
-		return
 
 	var scroll_dir := Vector3.ZERO
 	# Bottom of screen (toward +Z in 3D ground plane)
@@ -469,13 +492,21 @@ func _process_edge_scrolling(delta: float) -> void:
 	elif _finger_pos.x < rect.position.x + mx:
 		scroll_dir.x -= 1.0
 
-	if scroll_dir != Vector3.ZERO:
-		scroll_dir = scroll_dir.normalized()
-		_drag_world_pos += scroll_dir * (edge_scroll_speed * delta)
-		if level.grid:
-			var bounds := level.get_level_bounds()
-			_drag_world_pos.x = clampf(_drag_world_pos.x, bounds.position.x + 0.2, bounds.end.x - 0.2)
-			_drag_world_pos.z = clampf(_drag_world_pos.z, bounds.position.y + 0.2, bounds.end.y - 0.2)
+	return scroll_dir.normalized() if scroll_dir != Vector3.ZERO else Vector3.ZERO
+
+func _process_edge_scrolling(_delta: float) -> void:
+	if not is_instance_valid(level) or level.grid == null or not is_instance_valid(dracula):
+		return
+	var edge_dir := _get_edge_drag_direction()
+	if edge_dir != Vector3.ZERO:
+		# Fix 1: Lead marker in edge zones — place target a fixed lead distance ahead of Dracula in drag direction,
+		# recomputed every physics tick from his current position so he never catches up and runs continuously.
+		var lead_world := dracula.global_position + edge_dir * edge_lead_distance
+		var bounds := level.get_level_bounds()
+		lead_world.x = clampf(lead_world.x, bounds.position.x + 0.2, bounds.end.x - 0.2)
+		lead_world.z = clampf(lead_world.z, bounds.position.y + 0.2, bounds.end.y - 0.2)
+		_drag_world_pos = lead_world
+		_has_drag_world_pos = true
 
 func _update_drag_marker() -> void:
 	if not _move_dragging or move_marker == null or not is_instance_valid(level) or level.grid == null:
@@ -490,8 +521,9 @@ func _update_drag_marker() -> void:
 	var from := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
 	var mine := labels[grid.index_of(from)] if grid.in_bounds(from) else -1
 	var dest := grid.nearest_with_label(target, labels, mine, edge_penalty)
+	var in_edge := _get_edge_drag_direction() != Vector3.ZERO
 	if grid.in_bounds(dest):
-		move_marker.hold_at(grid.cell_center(dest))
+		move_marker.hold_at(grid.cell_center(dest), in_edge)
 
 # ── Sun ───────────────────────────────────────────────────────────────────
 
@@ -619,13 +651,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 			elif _touches.size() == 1:
 				_last_pinch_dist = -1.0
-				_on_finger(st.index, st.position, true)
+				_queue_touch_event("DOWN", st.index, st.position)
+				get_viewport().set_input_as_handled()
 		else:
 			_touches.erase(st.index)
 			if _touches.size() < 2:
 				_last_pinch_dist = -1.0
-			if st.index == _finger:
-				_on_finger(st.index, st.position, false)
+			_queue_touch_event("UP", st.index, st.position)
+			get_viewport().set_input_as_handled()
 
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
@@ -642,15 +675,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			_last_pinch_dist = cur_dist
 			get_viewport().set_input_as_handled()
 			return
-		elif _touches.size() <= 1 and sd.index == _finger:
-			_on_finger_moved(sd.position)
+		elif _touches.size() <= 1:
+			_queue_touch_event("MOVE", sd.index, sd.position)
+			get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
-		_on_finger(-1, mb.position, mb.pressed)
+		if mb.pressed:
+			if hud.is_in_play_view(mb.position):
+				_queue_touch_event("DOWN", -1, mb.position)
+				get_viewport().set_input_as_handled()
+		else:
+			_queue_touch_event("UP", -1, mb.position)
+			get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseMotion and _finger == -1:
-		_on_finger_moved((event as InputEventMouseMotion).position)
+		_queue_touch_event("MOVE", -1, (event as InputEventMouseMotion).position)
+		get_viewport().set_input_as_handled()
 
 func _on_finger(index: int, pos: Vector2, pressed: bool) -> void:
 	if pressed:
@@ -735,6 +776,7 @@ func _begin_move_drag() -> void:
 	else:
 		_drag_world_pos = dracula.global_position
 		_has_drag_world_pos = false
+	dracula.set_drag_state(true, false)
 	_repath_wait = 1.0 / maxf(1.0, drag_repath_rate)
 	_drag_update()
 
@@ -759,7 +801,19 @@ func _drag_update() -> void:
 	var target := grid.cell_at(world)
 	var target_label := labels[grid.index_of(target)] if grid.in_bounds(target) else -1
 	var dest := grid.nearest_with_label(target, labels, mine, edge_penalty)
+	var in_edge := _get_edge_drag_direction() != Vector3.ZERO
 	var snapped := target_label != mine
+
+	# Determine if destination is clamped at a shadow edge
+	var clamped_at_edge := false
+	if in_edge:
+		if not grid.in_bounds(target) or not grid.is_walkable(target) or target_label != mine:
+			clamped_at_edge = true
+	elif snapped:
+		clamped_at_edge = true
+
+	dracula.set_drag_state(true, clamped_at_edge)
+
 	var hop := false
 	if snapped:
 		var edge := grid.nearest_with_label(target, labels, mine)
@@ -778,12 +832,12 @@ func _drag_update() -> void:
 		var landing := grid.nearest_with_label(target, labels, target_label, edge_penalty)
 		if landing == _drag_dest or _walk_cells(from, landing, true, true):
 			_drag_dest = landing
-			move_marker.hold_at(grid.cell_center(landing))
+			move_marker.hold_at(grid.cell_center(landing), in_edge)
 			return
 	if not grid.in_bounds(dest):
 		return
-	move_marker.hold_at(grid.cell_center(dest))   # where he is going, not under a sunlit finger
-	if dest == _drag_dest:
+	move_marker.hold_at(grid.cell_center(dest), in_edge)   # where he is going, slightly faded in edge mode
+	if dest == _drag_dest and not (in_edge and dracula.get_remaining_distance() < 1.2):
 		return
 	_drag_dest = dest
 	if dest == from and not dracula.is_moving():
@@ -793,6 +847,7 @@ func _drag_update() -> void:
 func _end_move_drag(viewport_pos: Vector2) -> void:
 	_move_dragging = false
 	_has_drag_world_pos = false
+	dracula.set_drag_state(false, false)
 	var grid := level.grid
 	var world: Variant = _drag_world_pos if _drag_world_pos != null else (ground_point(viewport_pos) if hud.is_in_play_view(viewport_pos) else null)
 	_drag_world_pos = null
@@ -830,6 +885,8 @@ func _cancel_move_drag() -> void:
 	_finger = NO_FINGER
 	_has_drag_world_pos = false
 	_drag_world_pos = null
+	_queued_touch_events.clear()
+	dracula.set_drag_state(false, false)
 	if _move_dragging:
 		_move_dragging = false
 		move_marker.fade_out()
