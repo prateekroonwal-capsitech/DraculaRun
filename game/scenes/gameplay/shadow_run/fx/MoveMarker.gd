@@ -15,7 +15,7 @@ extends Node3D
 @export var pulse_time: float = 0.45
 @export var start_scale: float = 0.35
 ## Drag mode: how quickly the held ring glides to a new target (1/s).
-@export var follow_rate: float = 30.0
+@export var follow_rate: float = 40.0
 ## Transparency in edge lead mode (0.0 = fully opaque, 1.0 = invisible).
 @export var edge_mode_transparency: float = 0.45
 

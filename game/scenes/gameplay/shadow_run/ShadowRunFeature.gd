@@ -62,25 +62,30 @@ func set_state(new_state: LevelState) -> void:
 			_running = true
 			dracula.activate()
 			sensor.set_active(true)
+			set_process(true)
 			set_physics_process(true)
 			_exposure_grace_timer = start_exposure_grace_period
 			if _bus:
 				_bus.level_started.emit(str(level.level_number))
 		LevelState.INTRO:
 			_running = false
+			set_process(false)
 			set_physics_process(false)
 		LevelState.PAUSED:
 			_running = false
+			set_process(false)
 			set_physics_process(false)
 			if _bus:
 				_bus.game_paused.emit()
 		LevelState.DEAD:
 			_running = false
+			set_process(false)
 			set_physics_process(false)
 			if _bus:
 				_bus.player_died.emit()
 		LevelState.WON:
 			_running = false
+			set_process(false)
 			set_physics_process(false)
 			if _bus:
 				_bus.level_completed.emit(str(level.level_number))
@@ -122,12 +127,14 @@ func _state_name(s: LevelState) -> String:
 ## Where he waits / stops: each lit neighbour of a cell costs this many cells of distance,
 ## so he stands a step inside the shadow rather than on its sunny edge (0 = off).
 @export var edge_penalty: float = 2.0
-## Deadzone in screen pixels before recomputing world drag position from finger move.
-@export var drag_screen_deadzone: float = 8.0
 ## Screen margin fraction (~12%) for edge scrolling.
 @export var edge_scroll_margin_ratio: float = 0.12
 ## Lead distance ahead of Dracula while dragging in edge zones (meters).
 @export var edge_lead_distance: float = 2.5
+## Hold time inside an edge zone before lead target begins activating (seconds).
+@export var edge_lead_hold_time: float = 0.3
+## Duration to blend lead target in and out (seconds).
+@export var edge_lead_blend_time: float = 0.2
 
 @export_group("Sun control")
 ## Used until the player picks a mode in the Pause panel (then the saved choice wins).
@@ -164,17 +171,19 @@ var _sun_mode: SunInput.Mode = SunInput.Mode.JOYSTICK
 # Move finger: the one touch (-1 = mouse) that started in the play view.
 const NO_FINGER := -99
 var _finger: int = NO_FINGER
-var _finger_start: Vector2
-var _finger_pos: Vector2
+var _finger_start: Vector2 = Vector2.ZERO
+var _finger_pos: Vector2 = Vector2.ZERO
+var _finger_ground_pos: Vector3 = Vector3.ZERO
 var _finger_time: float = 0.0
 var _move_dragging: bool = false
 var _drag_dest: Vector2i = Vector2i(-1, -1)
 var _drag_world_pos: Variant = null
-var _last_drag_screen_pos: Vector2 = Vector2.ZERO
 var _has_drag_world_pos: bool = false
 var _repath_wait: float = 0.0
 var _hop_label: int = -1          # walk region the finger is held over across a gap
 var _hop_since: float = 0.0
+var _edge_zone_timer: float = 0.0
+var _edge_lead_blend: float = 0.0
 var _ray_query: PhysicsRayQueryParameters3D
 var _region: PackedByteArray = PackedByteArray()
 var _path_points: PackedVector3Array = PackedVector3Array()
@@ -236,6 +245,7 @@ func initialize(dependencies: Dictionary) -> void:
 func _ready() -> void:
 	print("[STARTUP %dms] ShadowRunFeature._ready" % Time.get_ticks_msec())
 	process_physics_priority = 20   # after Dracula (0) and ShadowSensor (10)
+	set_process(false)
 	set_physics_process(false)      # PDF §4: idle until the level starts
 	_ray_query = PhysicsRayQueryParameters3D.new()
 	if not _initialized:
@@ -442,9 +452,6 @@ func _physics_process(delta: float) -> void:
 			match ev.get("type"):
 				"DOWN":
 					_on_finger(ev.index, ev.pos, true)
-				"MOVE":
-					if ev.index == _finger:
-						_on_finger_moved(ev.pos)
 				"UP":
 					if ev.index == _finger:
 						_on_finger(ev.index, ev.pos, false)
@@ -462,13 +469,17 @@ func _physics_process(delta: float) -> void:
 		if _clock - _finger_time >= drag_start_time:
 			_begin_move_drag()
 		return
-	if _has_drag_world_pos:
-		_process_edge_scrolling(delta)
-	_update_drag_marker()
 	_repath_wait -= delta
 	if _repath_wait <= 0.0:
 		_repath_wait = 1.0 / maxf(1.0, drag_repath_rate)
 		_drag_update()
+
+func _process(delta: float) -> void:
+	if state != LevelState.PLAYING or not _running:
+		return
+	if not _move_dragging or _finger == NO_FINGER:
+		return
+	_update_drag_target_and_marker(delta)
 
 func _get_edge_drag_direction() -> Vector3:
 	if not hud or not hud.is_in_play_view(_finger_pos):
@@ -494,36 +505,61 @@ func _get_edge_drag_direction() -> Vector3:
 
 	return scroll_dir.normalized() if scroll_dir != Vector3.ZERO else Vector3.ZERO
 
-func _process_edge_scrolling(_delta: float) -> void:
-	if not is_instance_valid(level) or level.grid == null or not is_instance_valid(dracula):
+func _update_drag_target_and_marker(delta: float) -> void:
+	if not _move_dragging or move_marker == null or not is_instance_valid(level) or level.grid == null:
 		return
+
+	# 1. Edge-zone lead timer and smooth blend (Fix 5: only after holding for edge_lead_hold_time, blend over edge_lead_blend_time)
 	var edge_dir := _get_edge_drag_direction()
 	if edge_dir != Vector3.ZERO:
-		# Fix 1: Lead marker in edge zones — place target a fixed lead distance ahead of Dracula in drag direction,
-		# recomputed every physics tick from his current position so he never catches up and runs continuously.
-		var lead_world := dracula.global_position + edge_dir * edge_lead_distance
+		_edge_zone_timer += delta
+	else:
+		_edge_zone_timer = 0.0
+
+	if _edge_zone_timer >= edge_lead_hold_time:
+		_edge_lead_blend = minf(1.0, _edge_lead_blend + delta / maxf(0.01, edge_lead_blend_time))
+	else:
+		_edge_lead_blend = maxf(0.0, _edge_lead_blend - delta / maxf(0.01, edge_lead_blend_time))
+
+	# 2. Raycast latest finger position to ground using current camera transform (Fix 2: screen refresh rate)
+	var ground: Variant = ground_point(_finger_pos)
+	if ground != null:
+		_finger_ground_pos = ground
+	elif _finger_ground_pos == Vector3.ZERO and is_instance_valid(dracula):
+		_finger_ground_pos = dracula.global_position
+
+	# 3. Calculate target position with smooth edge-lead blend
+	var raw_target := _finger_ground_pos
+	if _edge_lead_blend > 0.0 and is_instance_valid(dracula):
+		var lead_world: Vector3 = dracula.global_position + edge_dir * edge_lead_distance
 		var bounds := level.get_level_bounds()
 		lead_world.x = clampf(lead_world.x, bounds.position.x + 0.2, bounds.end.x - 0.2)
 		lead_world.z = clampf(lead_world.z, bounds.position.y + 0.2, bounds.end.y - 0.2)
-		_drag_world_pos = lead_world
-		_has_drag_world_pos = true
+		raw_target = _finger_ground_pos.lerp(lead_world, _edge_lead_blend)
 
-func _update_drag_marker() -> void:
-	if not _move_dragging or move_marker == null or not is_instance_valid(level) or level.grid == null:
-		return
-	if _drag_world_pos == null:
-		return
+	# 4. Check shade and smoothly clamp to boundary if over sunlight or unreachable ground (Fix 4: on boundary, not cell center)
 	var grid := level.grid
-	var target := grid.cell_at(_drag_world_pos)
-	if not grid.in_bounds(target):
-		return
+	var target_cell := grid.cell_at(raw_target)
+	var from_cell := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
 	var labels := grid.walk_labels()
-	var from := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
-	var mine := labels[grid.index_of(from)] if grid.in_bounds(from) else -1
-	var dest := grid.nearest_with_label(target, labels, mine, edge_penalty)
-	var in_edge := _get_edge_drag_direction() != Vector3.ZERO
-	if grid.in_bounds(dest):
-		move_marker.hold_at(grid.cell_center(dest), in_edge)
+	var my_label := labels[grid.index_of(from_cell)] if grid.in_bounds(from_cell) else -1
+	var is_in_my_shade := grid.in_bounds(target_cell) and grid.is_walkable(target_cell) and (labels[grid.index_of(target_cell)] == my_label)
+
+	var marker_target := raw_target
+	if not is_in_my_shade and my_label >= 0:
+		var dest_cell := grid.nearest_with_label(target_cell, labels, my_label, edge_penalty)
+		if grid.in_bounds(dest_cell):
+			var c_center := grid.cell_center(dest_cell)
+			var half := grid.cell_size * 0.45
+			marker_target.x = clampf(raw_target.x, c_center.x - half, c_center.x + half)
+			marker_target.z = clampf(raw_target.z, c_center.z - half, c_center.z + half)
+			marker_target.y = c_center.y
+
+	_drag_world_pos = marker_target
+	_has_drag_world_pos = true
+
+	# 5. Position marker on exact ground point (Fix 3: no cell center snapping!)
+	move_marker.hold_at(marker_target, _edge_lead_blend > 0.05)
 
 # ── Sun ───────────────────────────────────────────────────────────────────
 
@@ -675,8 +711,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_last_pinch_dist = cur_dist
 			get_viewport().set_input_as_handled()
 			return
-		elif _touches.size() <= 1:
-			_queue_touch_event("MOVE", sd.index, sd.position)
+		elif _touches.size() <= 1 and sd.index == _finger:
+			_finger_pos = sd.position
+			if not _move_dragging and _finger_pos.distance_to(_finger_start) > drag_start_distance:
+				_begin_move_drag()
 			get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -690,7 +728,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseMotion and _finger == -1:
-		_queue_touch_event("MOVE", -1, (event as InputEventMouseMotion).position)
+		_finger_pos = (event as InputEventMouseMotion).position
+		if not _move_dragging and _finger_pos.distance_to(_finger_start) > drag_start_distance:
+			_begin_move_drag()
 		get_viewport().set_input_as_handled()
 
 func _on_finger(index: int, pos: Vector2, pressed: bool) -> void:
@@ -702,6 +742,11 @@ func _on_finger(index: int, pos: Vector2, pressed: bool) -> void:
 		_finger_pos = pos
 		_finger_time = _clock
 		_move_dragging = false
+		_edge_zone_timer = 0.0
+		_edge_lead_blend = 0.0
+		var g: Variant = ground_point(pos)
+		if g != null:
+			_finger_ground_pos = g
 		get_viewport().set_input_as_handled()
 		return
 	if index != _finger:
@@ -714,17 +759,9 @@ func _on_finger(index: int, pos: Vector2, pressed: bool) -> void:
 		handle_tap(pos)
 
 func _on_finger_moved(pos: Vector2) -> void:
-	var delta_screen := pos.distance_to(_last_drag_screen_pos)
 	_finger_pos = pos
 	if not _move_dragging and pos.distance_to(_finger_start) > drag_start_distance:
 		_begin_move_drag()
-	elif _move_dragging:
-		if delta_screen >= drag_screen_deadzone:
-			var new_world: Variant = ground_point(pos)
-			if new_world != null:
-				_drag_world_pos = new_world
-				_last_drag_screen_pos = pos
-				_has_drag_world_pos = true
 	get_viewport().set_input_as_handled()
 
 ## A tap at a viewport position (public so tests can drive it).
@@ -755,7 +792,8 @@ func begin_drag_at(viewport_pos: Vector2) -> void:
 
 func drag_to(viewport_pos: Vector2) -> void:
 	if _finger != NO_FINGER:
-		_on_finger_moved(viewport_pos)
+		_finger_pos = viewport_pos
+		_update_drag_target_and_marker(0.016)
 
 func end_drag_at(viewport_pos: Vector2) -> void:
 	if _finger != NO_FINGER:
@@ -768,16 +806,20 @@ func _begin_move_drag() -> void:
 	_move_dragging = true
 	_drag_dest = Vector2i(-1, -1)
 	_hop_label = -1
-	_last_drag_screen_pos = _finger_pos
+	_edge_zone_timer = 0.0
+	_edge_lead_blend = 0.0
 	var initial_world: Variant = ground_point(_finger_pos)
 	if initial_world != null:
+		_finger_ground_pos = initial_world
 		_drag_world_pos = initial_world
 		_has_drag_world_pos = true
 	else:
-		_drag_world_pos = dracula.global_position
+		_finger_ground_pos = dracula.global_position if is_instance_valid(dracula) else Vector3.ZERO
+		_drag_world_pos = _finger_ground_pos
 		_has_drag_world_pos = false
 	dracula.set_drag_state(true, false)
 	_repath_wait = 1.0 / maxf(1.0, drag_repath_rate)
+	_update_drag_target_and_marker(0.0)
 	_drag_update()
 
 ## One drag re-path: lead Dracula toward the cell under the finger, staying in his
@@ -832,11 +874,9 @@ func _drag_update() -> void:
 		var landing := grid.nearest_with_label(target, labels, target_label, edge_penalty)
 		if landing == _drag_dest or _walk_cells(from, landing, true, true):
 			_drag_dest = landing
-			move_marker.hold_at(grid.cell_center(landing), in_edge)
 			return
 	if not grid.in_bounds(dest):
 		return
-	move_marker.hold_at(grid.cell_center(dest), in_edge)   # where he is going, slightly faded in edge mode
 	if dest == _drag_dest and not (in_edge and dracula.get_remaining_distance() < 1.2):
 		return
 	_drag_dest = dest
@@ -847,6 +887,8 @@ func _drag_update() -> void:
 func _end_move_drag(viewport_pos: Vector2) -> void:
 	_move_dragging = false
 	_has_drag_world_pos = false
+	_edge_zone_timer = 0.0
+	_edge_lead_blend = 0.0
 	dracula.set_drag_state(false, false)
 	var grid := level.grid
 	var world: Variant = _drag_world_pos if _drag_world_pos != null else (ground_point(viewport_pos) if hud.is_in_play_view(viewport_pos) else null)
