@@ -23,7 +23,7 @@ const FIRST_LEVEL := "res://game/scenes/gameplay/shadow_run/levels/Level01.tscn"
 const SOLVER := preload("res://game/scenes/gameplay/shadow_run/level/level_solver.tres")
 
 @export var retries: int = 5
-@export var level_count: int = 3
+@export var level_count: int = 4
 @export var node_tolerance: int = 4
 @export var step_timeout: float = 25.0
 
@@ -76,9 +76,11 @@ func _run() -> void:
 				_fail("level %d did not start in the saved %s mode" % [li + 1, SunInput.MODE_KEYS[mode]])
 			if li == 0 and mode == SunInput.Mode.JOYSTICK:
 				_logger.info("Soak: viewport %s" % str(get_viewport().get_visible_rect().size))
+				feature.sun_guard_enabled = true   # the guard checks below need it on
 				await _check_basics(feature, ui)
 				await _check_mode_switch(feature, ui, save)
 				await _check_joystick(feature)
+				feature.sun_guard_enabled = false
 			await _play_level(feature)
 			var panel := await _wait_for_panel(ui, "LevelCompletePanel") as LevelCompletePanel
 			if panel == null:
@@ -104,7 +106,10 @@ func _run() -> void:
 			break
 		prev_id = feature.get_instance_id()
 		counts.append(int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)))
-		feature.force_death()
+		if i == 0:
+			await _check_free_sun(feature)   # the first death is a real burn with the guard off
+		else:
+			feature.force_death()
 		var panel := await _wait_for_panel(ui, "GameOverPanel") as GameOverPanel
 		if panel == null:
 			_fail("Game Over panel never opened")
@@ -332,14 +337,34 @@ func _physics_frames(n: int) -> void:
 	for _i in n:
 		await get_tree().physics_frame
 
+## Guard off (the default): the sun turns freely, Dracula burns in sunlight.
+func _check_free_sun(f: ShadowRunFeature) -> void:
+	var start_exposure := f.sensor.exposure
+	f.sun_rig.set_target(f.level.azimuth_max, f.sun_rig.target_elevation)
+	await _wait_settled(f)
+	if absf(f.sun_rig.azimuth - f.level.azimuth_max) > 0.5:
+		_fail("free sun: the sun stopped at %.1f instead of %.1f" % [f.sun_rig.azimuth, f.level.azimuth_max])
+	var t := 0.0
+	while not f.dracula.is_dead_or_dying() and t < 3.0:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	_logger.info("Soak: free sun reached az %.1f; exposure %.1f → %.1f, burning=%s after %.1f s" % [
+		f.sun_rig.azimuth, start_exposure, f.sensor.exposure, str(f.dracula.is_dead_or_dying()), t])
+	if not f.dracula.is_dead_or_dying():
+		_fail("free sun: Dracula did not burn in sunlight")
+
 # ── Playthrough ───────────────────────────────────────────────────────────
 
 func _play_level(f: ShadowRunFeature) -> void:
-	var r := SOLVER.solve(f.level)
+	var r := SOLVER.solve_schedule(f.level) if f.level.auto_sun else SOLVER.solve(f.level)
 	if not r.solvable:
 		_fail("level %d unsolvable in game: %s" % [f.level.level_number, r.error])
 		return
 	var plan: Array = r.plan
+	# Villagers are covered by VillagerStealthTest; here they stand still so the solver's
+	# shade plan can be replayed. Hide steps still go through a real tap on the spot.
+	for v in f.villagers():
+		v.set_active(false)
 	var peak := 0.0
 	var taps := 0
 	var i := 0
@@ -350,7 +375,15 @@ func _play_level(f: ShadowRunFeature) -> void:
 			var cell: Vector2i = step.cell
 			var dest := f.level.grid.cell_center(cell)
 			var screen := get_viewport().get_camera_3d().unproject_position(dest)
-			if f.hud.is_in_play_view(screen) and f.level.grid.cell_at(f.ground_point(screen)) == cell:
+			var spot := f.level.get_node_or_null(step.hide) as HideSpot if step.has("hide") else null
+			if spot:
+				var spot_screen := get_viewport().get_camera_3d().unproject_position(spot.global_position + Vector3(0.0, 0.8, 0.0))
+				if f.hud.is_in_play_view(spot_screen) and f.pick_hide_spot(spot_screen) == spot:
+					f.handle_tap(spot_screen)
+					taps += 1
+				else:
+					f.go_hide(spot)
+			elif f.hud.is_in_play_view(screen) and f.level.grid.cell_at(f.ground_point(screen)) == cell:
 				f.handle_tap(screen)
 				taps += 1
 			else:
@@ -366,6 +399,27 @@ func _play_level(f: ShadowRunFeature) -> void:
 					str(g.cell_at(f.dracula.global_position)), str(g.is_shaded(g.cell_at(f.dracula.global_position))),
 					f.sun_rig.azimuth, f.sun_rig.elevation, str(f.sun_rig.is_settled()), str(g.is_busy()), f.sensor.exposure,
 					str(g.is_walkable(cell)), str(not g.find_path(from, cell).is_empty())])
+				return
+			if spot:
+				await _physics_frames(20)
+				if f.hidden_spot() != spot:
+					_fail("level %d: did not hide in %s" % [f.level.level_number, str(step.hide)])
+					return
+			i += 1
+		elif f.level.auto_sun:
+			# The sun runs by itself: wait (in place) until it holds at the plan's next key.
+			if f.hud.active_sun_input().get_node("SunLock").visible == false:
+				_fail("level %d: auto sun but the sun control is not chained" % f.level.level_number)
+			var key: int = plan[i].key
+			var t := 0.0
+			while t < 60.0:
+				await get_tree().physics_frame
+				t += get_physics_process_delta_time()
+				var st := f.auto_sun_state()
+				if st.key == key and not st.moving and f.sun_rig.is_settled() and not f.level.grid.is_busy():
+					break
+			if f.dracula.is_dead_or_dying():
+				_fail("level %d: burned while the sun swept to key %d" % [f.level.level_number, key])
 				return
 			i += 1
 		else:

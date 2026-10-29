@@ -1,0 +1,88 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/barrel.tscn" id="1_barrel"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/props/village/HideSpot.gd" id="2_HideSpot"]
+[ext_resource type="Material" path="res://game/assets/materials/village/hide_marker.tres" id="3_hide_marker"]
+[ext_resource type="Material" path="res://game/assets/materials/villager/hidden_icon.tres" id="4_hidden_icon"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_1"]
+radius = 0.42
+height = 0.96
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_2"]
+radius = 0.42
+height = 0.96
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_3"]
+radius = 0.42
+height = 0.96
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_4"]
+size = Vector3(2, 1.9, 2.6)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_5"]
+size = Vector2(0.9, 0.9)
+
+[sub_resource type="QuadMesh" id="QuadMesh_6"]
+size = Vector2(0.55, 0.55)
+
+[node name="barrel_hide" type="Node3D" node_paths=PackedStringArray("hide_zone", "entry", "entry_marker", "hidden_icon")]
+editor_description = "Hiding spot: three primitive barrels (barrel.tscn, 0.96 m tall). Solid (obstacle layer), no gameplay shade. Dracula hides from Entry (in front, +Z)."
+script = ExtResource("2_HideSpot")
+max_hide_time = 0
+hide_zone = NodePath("HideZone")
+entry = NodePath("Entry")
+entry_marker = NodePath("EntryMarker")
+hidden_icon = NodePath("HiddenIcon")
+
+[node name="Barrel0" parent="." instance=ExtResource("1_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0, -0.2)
+
+[node name="Barrel1" parent="." instance=ExtResource("1_barrel")]
+transform = Transform3D(0.9063, 0, 0.42262, 0, 1, 0, -0.42262, 0, 0.9063, 0.45, 0, -0.25)
+
+[node name="Barrel2" parent="." instance=ExtResource("1_barrel")]
+transform = Transform3D(0.5, 0, 0.86603, 0, 1, 0, -0.86603, 0, 0.5, 0, 0, 0.42)
+
+[node name="ObstacleBody" parent="." type="StaticBody3D"]
+collision_layer = 4
+collision_mask = 0
+
+[node name="Shape0" parent="ObstacleBody" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0.48, -0.2)
+shape = SubResource("CylinderShape3D_1")
+
+[node name="Shape1" parent="ObstacleBody" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.48, -0.25)
+shape = SubResource("CylinderShape3D_2")
+
+[node name="Shape2" parent="ObstacleBody" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.48, 0.42)
+shape = SubResource("CylinderShape3D_3")
+
+[node name="HideZone" parent="." type="Area3D"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+editor_description = "Tap target (layer 5 hide_spot). Covers the prop and its Entry."
+
+[node name="Shape" parent="HideZone" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0.45)
+shape = SubResource("BoxShape3D_4")
+
+[node name="Entry" parent="." type="Marker3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.4)
+editor_description = "Where Dracula stands to hide. Must be on a non-solid grid cell reachable in shade."
+
+[node name="EntryMarker" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 1.4)
+mesh = SubResource("PlaneMesh_5")
+surface_material_override/0 = ExtResource("3_hide_marker")
+cast_shadow = 0
+
+[node name="HiddenIcon" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+mesh = SubResource("QuadMesh_6")
+surface_material_override/0 = ExtResource("4_hidden_icon")
+cast_shadow = 0
+visible = false

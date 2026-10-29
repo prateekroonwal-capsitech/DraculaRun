@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="LevelCatalog" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="LevelCatalog" format=3 uid="uid://c6xg3vmt54qy8"]
 
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/LevelCatalog.gd" id="1_cat"]
-[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/LevelCatalogEntry.gd" id="2_entry"]
+[ext_resource type="Script" uid="uid://c6bxjvuhokhgt" path="res://game/scenes/gameplay/shadow_run/level/LevelCatalog.gd" id="1_cat"]
+[ext_resource type="Script" uid="uid://ueow3mm30smg" path="res://game/scenes/gameplay/shadow_run/level/LevelCatalogEntry.gd" id="2_entry"]
 
 [sub_resource type="Resource" id="Resource_lvl1"]
 script = ExtResource("2_entry")
@@ -21,6 +21,12 @@ id = "3"
 display_name = "The Narrow Gate"
 scene_path = "res://game/scenes/gameplay/shadow_run/levels/Level03.tscn"
 
+[sub_resource type="Resource" id="Resource_lvl4"]
+script = ExtResource("2_entry")
+id = "4"
+display_name = "Village Watch"
+scene_path = "res://game/scenes/gameplay/shadow_run/levels/Level04.tscn"
+
 [resource]
 script = ExtResource("1_cat")
-entries = [SubResource("Resource_lvl1"), SubResource("Resource_lvl2"), SubResource("Resource_lvl3")]
+entries = Array[ExtResource("2_entry")]([SubResource("Resource_lvl1"), SubResource("Resource_lvl2"), SubResource("Resource_lvl3"), SubResource("Resource_lvl4")])

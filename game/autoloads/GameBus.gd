@@ -25,6 +25,10 @@ signal level_completed(level_id: String)
 signal sun_exposure_changed(value: float)
 ## A power-up was picked up. Reserved for post-prototype power-ups; nothing emits it yet.
 signal powerup_collected(id: String)
+## A villager's detection meter filled: it shouts and gives chase. villager = its node name.
+signal villager_alerted(villager: String)
+## Dracula slipped into (true) or out of (false) a hiding spot.
+signal dracula_hidden_changed(hidden: bool)
 
 # ── Economy ───────────────────────────────────────────────────────────────
 signal coins_changed(new_amount: int)

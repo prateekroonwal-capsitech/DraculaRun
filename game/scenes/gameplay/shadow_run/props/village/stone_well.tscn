@@ -1,0 +1,146 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/village/well_stone.tres" id="1_well_stone"]
+[ext_resource type="Material" path="res://game/assets/materials/village/stone_base.tres" id="2_stone_base"]
+[ext_resource type="Material" path="res://game/assets/materials/village/water.tres" id="3_water"]
+[ext_resource type="Material" path="res://game/assets/materials/timber.tres" id="4_timber"]
+[ext_resource type="Material" path="res://game/assets/materials/village/timber_dark.tres" id="5_timber_dark"]
+[ext_resource type="Material" path="res://game/assets/materials/village/barrel_wood.tres" id="6_barrel_wood"]
+[ext_resource type="Material" path="res://game/assets/materials/village/cart_canvas.tres" id="7_cart_canvas"]
+[ext_resource type="Material" path="res://game/assets/materials/village/roof_tile.tres" id="8_roof_tile"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 0.85
+bottom_radius = 0.9
+height = 0.85
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_2"]
+top_radius = 0.92
+bottom_radius = 0.92
+height = 0.12
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_3"]
+top_radius = 0.66
+bottom_radius = 0.66
+height = 0.02
+radial_segments = 14
+rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+size = Vector3(0.14, 2.1, 0.14)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5"]
+size = Vector3(0.14, 2.1, 0.14)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_6"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 1.7
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_7"]
+top_radius = 0.16
+bottom_radius = 0.13
+height = 0.25
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_8"]
+top_radius = 0.012
+bottom_radius = 0.012
+height = 0.4
+radial_segments = 4
+rings = 1
+
+[sub_resource type="PrismMesh" id="PrismMesh_9"]
+size = Vector3(1.3, 0.65, 2)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_10"]
+radius = 0.9
+height = 0.97
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_11"]
+size = Vector3(0.14, 2.1, 0.14)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_12"]
+size = Vector3(0.14, 2.1, 0.14)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_13"]
+points = PackedVector3Array(-1, 0, -0.65, 1, 0, -0.65, 1, 0, 0.65, -1, 0, 0.65, -1, 0.65, 0, 1, 0.65, 0)
+
+[node name="stone_well" type="Node3D"]
+editor_description = "Stone well, 1.8 m wide, roof top 2.75 m. Casts gameplay shade (base, posts, roof). Origin: ground centre."
+
+[node name="Base" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.425, 0)
+mesh = SubResource("CylinderMesh_1")
+surface_material_override/0 = ExtResource("1_well_stone")
+
+[node name="Rim" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.91, 0)
+mesh = SubResource("CylinderMesh_2")
+surface_material_override/0 = ExtResource("2_stone_base")
+
+[node name="Water" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("CylinderMesh_3")
+surface_material_override/0 = ExtResource("3_water")
+cast_shadow = 0
+
+[node name="PostL" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 1.05, 0)
+mesh = SubResource("BoxMesh_4")
+surface_material_override/0 = ExtResource("4_timber")
+
+[node name="PostR" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 1.05, 0)
+mesh = SubResource("BoxMesh_5")
+surface_material_override/0 = ExtResource("4_timber")
+
+[node name="Crank" parent="." type="MeshInstance3D"]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 0, 1.75, 0)
+mesh = SubResource("CylinderMesh_6")
+surface_material_override/0 = ExtResource("5_timber_dark")
+cast_shadow = 0
+
+[node name="Bucket" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 1.25, 0)
+mesh = SubResource("CylinderMesh_7")
+surface_material_override/0 = ExtResource("6_barrel_wood")
+cast_shadow = 0
+
+[node name="Rope" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 1.55, 0)
+mesh = SubResource("CylinderMesh_8")
+surface_material_override/0 = ExtResource("7_cart_canvas")
+cast_shadow = 0
+
+[node name="Roof" parent="." type="MeshInstance3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 2.425, 0)
+mesh = SubResource("PrismMesh_9")
+surface_material_override/0 = ExtResource("8_roof_tile")
+
+[node name="ShadowCaster" parent="." type="StaticBody3D"]
+collision_layer = 8
+collision_mask = 0
+
+[node name="BaseShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.485, 0)
+shape = SubResource("CylinderShape3D_10")
+
+[node name="PostL" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 1.05, 0)
+shape = SubResource("BoxShape3D_11")
+
+[node name="PostR" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 1.05, 0)
+shape = SubResource("BoxShape3D_12")
+
+[node name="RoofShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+shape = SubResource("ConvexPolygonShape3D_13")

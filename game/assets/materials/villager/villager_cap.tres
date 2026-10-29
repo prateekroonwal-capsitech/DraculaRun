@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://game/assets/shaders/villager_cloth.gdshader" id="1_sh"]
+
+[resource]
+resource_name = "Cap"
+shader = ExtResource("1_sh")
+shader_parameter/part = 2

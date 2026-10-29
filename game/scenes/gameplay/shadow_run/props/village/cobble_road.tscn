@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/village/cobblestone.tres" id="1_cobblestone"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+size = Vector3(4, 0.02, 4)
+
+[node name="cobble_road" type="Node3D"]
+editor_description = "Cobblestone road segment, 4 × 4 m (scale on X/Z to resize; the stone pattern is world-space so segments tile). Visual only: no collision, no shadows. Origin: ground centre."
+
+[node name="Cobbles" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("BoxMesh_1")
+surface_material_override/0 = ExtResource("1_cobblestone")
+cast_shadow = 0

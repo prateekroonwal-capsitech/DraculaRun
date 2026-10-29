@@ -29,6 +29,8 @@ const CASTER_LAYER_BIT: int = 1 << 3   # project layer 4 "shadow_caster"
 
 var exposure: float = 0.0
 var exposure_fraction: float = 0.0
+## True while Dracula is hidden in a HideSpot: the sun can't reach him (counts as full shade).
+var shielded: bool = false
 
 # Debug data for ShadowDebugOverlay (filled every sample; no allocations per frame).
 var debug_from: PackedVector3Array = PackedVector3Array()
@@ -78,6 +80,9 @@ static func is_point_shaded(space: PhysicsDirectSpaceState3D, query: PhysicsRayQ
 ## Samples all points now and returns the lit fraction (0 = fully shaded).
 func sample() -> float:
 	if _sun == null or _points.is_empty():
+		return 0.0
+	if shielded:
+		exposure_fraction = 0.0
 		return 0.0
 	var space := get_world_3d().direct_space_state
 	var toward := _sun.get_toward_sun()

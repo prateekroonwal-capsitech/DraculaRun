@@ -25,6 +25,10 @@ extends Resource
 ## adjustments, windows, readable steps and a replayable plan:
 ##   {"type": "move", "cell": Vector2i} / {"type": "sun", "azimuth": float, "elevation": float}
 ## (consecutive "sun" entries are the waypoints of one adjustment).
+## Hiding spots: a HideSpot's Entry cell is a pivot whose footprint never needs shade (a
+## hidden Dracula is safe from the sun), so the sun may sweep through angles that light it;
+## he still has to be able to walk in (shaded at the start angle) and out (shaded at the
+## final angle). Such moves carry "hide": the HideSpot's path relative to the level.
 
 ## Sun sampling step on both axes, degrees.
 @export var angle_step: float = 2.5
@@ -34,6 +38,10 @@ extends Resource
 @export var goal_radius: float = 0.8
 ## Give up after this many adjustments.
 @export var max_adjustments: int = 8
+## Auto-sun levels: Dracula's run speed (m/s) for "can he get there within the hold".
+@export var run_speed: float = 8.0
+## Auto-sun levels: give up after this many full loops of the sun schedule.
+@export var max_cycles: int = 3
 
 var _grid: ShadeGrid
 var _azs: PackedFloat32Array
@@ -45,6 +53,9 @@ var _masks: Array = []   # angle index -> PackedByteArray (walkable)
 var _fps: Array = []     # angle index -> PackedByteArray (footprint shaded)
 var _labs: Array = []    # angle index -> PackedInt32Array (region labels)
 var _mid_cache: Dictionary = {}
+var _hide: PackedByteArray = PackedByteArray()   # cell -> 1 if a HideSpot's Entry
+var _hide_paths: Dictionary = {}                 # cell index -> NodePath (relative to the level)
+var _sched_cache: Dictionary = {}                # auto sun: Vector2 angle -> walkable mask
 
 ## The level's ShadeGrid must have build_static() done and be in a physics space.
 func solve(level: ShadowLevel) -> Dictionary:
@@ -62,6 +73,7 @@ func solve(level: ShadowLevel) -> Dictionary:
 	_fps.resize(_na * _ne)
 	_labs.resize(_na * _ne)
 	_mid_cache.clear()
+	_collect_hide_spots(level)
 	var a0 := _nearest_index(_els, level.sun_start_elevation) * _na + _nearest_index(_azs, level.sun_start_azimuth)
 	var start_cell := _nearest_open(_mask(a0), _grid.cell_at(level.start.global_position), 2)
 	var fail := {"solvable": false, "needs_sun": true, "trivial": "", "adjustments": -1, "plan": [],
@@ -99,13 +111,17 @@ func solve(level: ShadowLevel) -> Dictionary:
 		if best.is_empty():
 			fail.error = "internal: no adjustment found from a state %d away" % left
 			return fail
-		plan.append({"type": "move", "cell": best.pivot})
+		var move := {"type": "move", "cell": best.pivot}
+		var pi := _grid.index_of(best.pivot)
+		if _hide[pi] != 0 and _needs_hiding(best.path, pi):
+			move["hide"] = _hide_paths[pi]
+		plan.append(move)
 		for a in _compress(best.path):
 			plan.append({"type": "sun", "azimuth": _az_of(a), "elevation": _el_of(a)})
 		var w: Dictionary = best.window
 		windows.append(w)
-		steps.append("walk to cell %s → sun to az %.1f° el %.1f° (window: az %.1f…%.1f° at that elevation, el %.1f…%.1f° at that azimuth)" % [
-			str(best.pivot), _az_of(best.angle), _el_of(best.angle),
+		steps.append(("hide at %s (cell %s) → sun" % [str(move.hide), str(best.pivot)] if move.has("hide") else "walk to cell %s → sun" % str(best.pivot)) + " to az %.1f° el %.1f° (window: az %.1f…%.1f° at that elevation, el %.1f…%.1f° at that azimuth)" % [
+			_az_of(best.angle), _el_of(best.angle),
 			w.azimuth_range.x, w.azimuth_range.y, w.elevation_range.x, w.elevation_range.y])
 		st = _state(best.angle, _lab(best.angle)[_grid.index_of(best.pivot)])
 	var goal_cell := _goal_in(st, goal_cells)
@@ -113,7 +129,159 @@ func solve(level: ShadowLevel) -> Dictionary:
 	steps.append("walk to the goal (cell %s)" % str(goal_cell))
 	return {"solvable": true, "needs_sun": adjustments > 0, "trivial": _sweep_reaches_goal(a0, start_cell, goal_cells),
 		"adjustments": adjustments, "plan": plan, "steps": steps, "windows": windows, "error": "",
-		"angles": _na * _ne, "start_cell": start_cell}
+		"angles": _na * _ne, "start_cell": start_cell,
+		"start_angle": Vector2(level.sun_start_azimuth, level.sun_start_elevation)}
+
+# ── Auto-sun levels (ShadowLevel.auto_sun) ────────────────────────────────
+
+## Solver for levels whose sun runs on a fixed loop. The player only chooses where Dracula
+## is. State = (hold key k, cell he stands on when the hold starts). During a hold he may
+## run (at `run_speed`) anywhere in his shade region that he reaches before the hold ends;
+## when the sun sweeps to key k+1 he must be on a cell whose footprint stays shaded at
+## every sampled angle of the sweep (or on a hiding spot's Entry, then hidden), and that
+## cell must be walkable at key k+1. The goal must be reached during some hold.
+## Same result format as solve(); "sun" plan entries carry "key" (the hold they start).
+func solve_schedule(level: ShadowLevel) -> Dictionary:
+	_grid = level.grid
+	_grid.prepare_variable_mask(level.azimuth_min, level.azimuth_max, level.elevation_min, level.elevation_max)
+	_n = _grid.cell_count()
+	_sched_cache.clear()
+	_collect_hide_spots(level)
+	var keys := level.auto_sun_keys
+	var fail := {"solvable": false, "needs_sun": true, "trivial": "", "adjustments": -1, "plan": [],
+		"steps": [], "windows": [], "angles": 0}
+	if keys.size() < 2:
+		fail.error = "auto_sun needs at least two auto_sun_keys"
+		return fail
+	var m0 := _sched_mask(keys[0])
+	var start_cell := _nearest_open(m0, _grid.cell_at(level.start.global_position), 2)
+	if start_cell.x < 0:
+		fail.error = "start is not in shade at the first key"
+		return fail
+	var goal_cells := _goal_cells(level.goal.global_position)
+	var nk := keys.size()
+	# Cells that survive each sweep k → k+1 (footprint shaded throughout, or a hiding spot).
+	var survive: Array = []
+	for k in nk:
+		survive.append(_sweep_survivors(keys[k], keys[(k + 1) % nk]))
+	var start_state := Vector2i(0, _grid.index_of(start_cell))
+	var came := {start_state: null}
+	var queue: Array[Vector2i] = [start_state]
+	var head := 0
+	var found := Vector2i(-1, -1)
+	var goal_hit := -1
+	var max_holds := nk * maxi(1, max_cycles)
+	var depth := {start_state: 0}
+	while head < queue.size():
+		var st := queue[head]
+		head += 1
+		var k := st.x
+		var budget := (level.auto_sun_hold_time + (level.auto_sun_first_hold_bonus if depth[st] == 0 else 0.0)) * run_speed
+		var dist := _walk_dist(_sched_mask(keys[k]), _cell(st.y), budget)
+		for g in goal_cells:
+			if dist.has(_grid.index_of(g)):
+				found = st
+				goal_hit = _grid.index_of(g)
+				break
+		if found.x >= 0:
+			break
+		if int(depth[st]) >= max_holds:
+			continue
+		var next_mask := _sched_mask(keys[(k + 1) % nk])
+		var surv: PackedByteArray = survive[k]
+		for c in dist:
+			if surv[c] == 0 or next_mask[c] == 0:
+				continue
+			var nst := Vector2i((k + 1) % nk, c)
+			if came.has(nst):
+				continue
+			came[nst] = st
+			depth[nst] = int(depth[st]) + 1
+			queue.append(nst)
+	if found.x < 0:
+		fail.error = "goal unreachable within %d holds" % max_holds
+		return fail
+	# Rebuild the chain of states.
+	var chain: Array[Vector2i] = []
+	var s: Variant = found
+	while s != null:
+		chain.push_front(s)
+		s = came[s]
+	var plan: Array[Dictionary] = []
+	var steps: Array[String] = []
+	for i in range(1, chain.size()):
+		var prev := chain[i - 1]
+		var cur := chain[i]
+		var cell := _cell(cur.y)
+		var move := {"type": "move", "cell": cell}
+		if _hide[cur.y] != 0 and not _sweep_survivors(keys[prev.x], keys[cur.x], false)[cur.y]:
+			move["hide"] = _hide_paths[cur.y]
+		plan.append(move)
+		var a := keys[cur.x]
+		plan.append({"type": "sun", "azimuth": a.x, "elevation": a.y, "key": cur.x})
+		steps.append("hold %d (sun az %.1f° el %.1f°): %s %s, wait for the sun to sweep to az %.1f° el %.1f°" % [
+			prev.x, keys[prev.x].x, keys[prev.x].y, "hide at %s on" % str(move.hide) if move.has("hide") else "go to",
+			str(cell), a.x, a.y])
+	plan.append({"type": "move", "cell": _cell(goal_hit)})
+	steps.append("hold %d: walk to the goal (cell %s)" % [found.x, str(_cell(goal_hit))])
+	return {"solvable": true, "needs_sun": chain.size() > 1, "trivial": "" if chain.size() > 1 else "goal reachable in the first hold",
+		"adjustments": chain.size() - 1, "plan": plan, "steps": steps, "windows": [], "error": "", "angles": nk,
+		"start_cell": start_cell, "start_angle": keys[0]}
+
+func _collect_hide_spots(level: ShadowLevel) -> void:
+	_hide = PackedByteArray()
+	_hide.resize(_n)
+	_hide_paths.clear()
+	for node in level.find_children("*", "Node3D", true, false):
+		if node is HideSpot:
+			var hc := _grid.cell_at((node as HideSpot).entry_position())
+			if _grid.in_bounds(hc):
+				_hide[_grid.index_of(hc)] = 1
+				_hide_paths[_grid.index_of(hc)] = level.get_path_to(node)
+
+## Walkable mask at an exact angle (cached).
+func _sched_mask(angle: Vector2) -> PackedByteArray:
+	if not _sched_cache.has(angle):
+		_sched_cache[angle] = _grid.compute_walkable_fast(SunRig.direction_from_angles(angle.x, angle.y))
+	return _sched_cache[angle]
+
+## 1 for cells whose footprint stays shaded at every sample of the sweep a → b
+## (sampled every angle_step degrees); hiding-spot entries count when `with_hide`.
+func _sweep_survivors(a: Vector2, b: Vector2, with_hide: bool = true) -> PackedByteArray:
+	var samples := maxi(2, int(ceil(maxf(absf(b.x - a.x), absf(b.y - a.y)) / maxf(0.5, angle_step))) + 1)
+	var out := PackedByteArray()
+	out.resize(_n)
+	out.fill(1)
+	for i in samples:
+		var fp := _footprint(_sched_mask(a.lerp(b, float(i) / float(samples - 1))))
+		for c in _n:
+			if out[c] != 0 and fp[c] == 0:
+				out[c] = 0
+	if with_hide:
+		for c in _n:
+			if _hide[c] != 0:
+				out[c] = 1
+	return out
+
+## Running distance (m) from `from` to every cell of its shade region within `limit` m.
+func _walk_dist(mask: PackedByteArray, from: Vector2i, limit: float) -> Dictionary:
+	var dist := {_grid.index_of(from): 0.0}
+	var walk := func(c: Vector2i) -> bool: return _grid.in_bounds(c) and mask[_grid.index_of(c)] != 0
+	if not walk.call(from):
+		return dist
+	var heap_f := PackedFloat32Array()
+	var heap_i := PackedInt32Array()
+	ShadeGrid._heap_push(heap_f, heap_i, 0.0, _grid.index_of(from))
+	while heap_i.size() > 0:
+		var cur := ShadeGrid._heap_pop(heap_f, heap_i)
+		var d: float = dist[cur]
+		for nb in _grid._neighbours(_cell(cur), walk, true):
+			var ni := _grid.index_of(nb[0])
+			var nd: float = d + float(nb[1]) * _grid.cell_size
+			if nd <= limit and nd < float(dist.get(ni, INF)):
+				dist[ni] = nd
+				ShadeGrid._heap_push(heap_f, heap_i, nd, ni)
+	return dist
 
 # ── Search ────────────────────────────────────────────────────────────────
 
@@ -129,7 +297,7 @@ func _expand(frontier: Array[int], dist: Dictionary, layer: int) -> Array[int]:
 		var fp := _fp(a)
 		var r := _label_of(st)
 		for c in _n:
-			if lab[c] == r and fp[c] != 0 and seen[a * _n + c] == 0:
+			if lab[c] == r and (fp[c] != 0 or _hide[c] != 0) and seen[a * _n + c] == 0:
 				seen[a * _n + c] = 1
 				queue.append(a * _n + c)
 	var out: Array[int] = []
@@ -150,13 +318,16 @@ func _expand(frontier: Array[int], dist: Dictionary, layer: int) -> Array[int]:
 				continue
 			var b := by * _na + bx
 			var q := b * _n + c
-			if seen[q] != 0 or _fp(b)[c] == 0:
+			if seen[q] != 0 or not _pivot_ok(b, c):
 				continue
-			if check_midpoints and not _mid_ok(a, b, c):
+			if check_midpoints and _hide[c] == 0 and not _mid_ok(a, b, c):
 				continue
 			seen[q] = 1
 			queue.append(q)
-			var nst := _state(b, _lab(b)[c])
+			var l := _lab(b)[c]
+			if l < 0:
+				continue   # hidden through a lit angle: he can't step out here
+			var nst := _state(b, l)
 			if not dist.has(nst):
 				dist[nst] = layer
 				out.append(nst)
@@ -174,7 +345,7 @@ func _best_adjustment(st: int, dist: Dictionary, need: int) -> Dictionary:
 	var best := {}
 	var best_score := -1.0
 	for c in _n:
-		if lab0[c] != r or fp0[c] == 0:
+		if lab0[c] != r or (fp0[c] == 0 and _hide[c] == 0):
 			continue
 		var came := PackedByteArray()   # 0 unseen, 1..4 via direction, 5 = start
 		came.resize(_na * _ne)
@@ -187,7 +358,7 @@ func _best_adjustment(st: int, dist: Dictionary, need: int) -> Dictionary:
 		while head < queue.size():
 			var x := queue[head]
 			head += 1
-			if int(dist.get(_state(x, _lab(x)[c]), 999)) <= need:
+			if _lab(x)[c] >= 0 and int(dist.get(_state(x, _lab(x)[c]), 999)) <= need:
 				good[x] = 1
 				any = true
 			var ax := x % _na
@@ -199,7 +370,7 @@ func _best_adjustment(st: int, dist: Dictionary, need: int) -> Dictionary:
 				if bx < 0 or by < 0 or bx >= _na or by >= _ne:
 					continue
 				var y := by * _na + bx
-				if came[y] == 0 and _fp(y)[c] != 0 and (not check_midpoints or _mid_ok(x, y, c)):
+				if came[y] == 0 and _pivot_ok(y, c) and (not check_midpoints or _hide[c] != 0 or _mid_ok(x, y, c)):
 					came[y] = d + 1
 					queue.append(y)
 		if not any:
@@ -285,6 +456,13 @@ func _compress(path: PackedInt32Array) -> PackedInt32Array:
 
 # ── Angles, states, cached masks ──────────────────────────────────────────
 
+## Walkable mask at the sampled angle nearest (az, el) (after solve(); used by PatrolCheck).
+## After solve_schedule() it is the mask at exactly (az, el).
+func mask_for(az: float, el: float) -> PackedByteArray:
+	if _sched_cache.has(Vector2(az, el)):
+		return _sched_cache[Vector2(az, el)]
+	return _mask(_nearest_index(_els, el) * _na + _nearest_index(_azs, az))
+
 static func _step_x(d: int) -> int:
 	return 1 if d == 0 else (-1 if d == 1 else 0)
 
@@ -331,6 +509,19 @@ func _mask(a: int) -> PackedByteArray:
 	if _masks[a] == null:
 		_masks[a] = _grid.compute_walkable_fast(SunRig.direction_from_angles(_az_of(a), _el_of(a)))
 	return _masks[a]
+
+## Dracula may stay on cell c while the sun is at angle a: his footprint is shaded, or c is
+## a hiding spot's Entry (hidden = safe from the sun).
+func _pivot_ok(a: int, c: int) -> bool:
+	return _hide[c] != 0 or _fp(a)[c] != 0
+
+## True when the adjustment along `path` lights the footprint at c somewhere, i.e. he
+## must actually hide for it (otherwise standing there is enough).
+func _needs_hiding(path: PackedInt32Array, c: int) -> bool:
+	for a in path:
+		if _fp(a)[c] == 0:
+			return true
+	return false
 
 ## Footprint shaded = the cell and its left/right neighbours are walkable.
 func _fp(a: int) -> PackedByteArray:

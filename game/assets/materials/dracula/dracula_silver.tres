@@ -1,6 +1,6 @@
-[gd_resource type="StandardMaterial3D" format=3]
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://cbt5d7o052ekl"]
 
-[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="1_rim"]
+[ext_resource type="Material" uid="uid://cu3w2naqtv1i1" path="res://game/assets/materials/dracula/dracula_rim.tres" id="1_rim"]
 
 [resource]
 resource_name = "Silver"

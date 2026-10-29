@@ -1,0 +1,134 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/village/hay.tres" id="1_hay"]
+[ext_resource type="Material" path="res://game/assets/materials/village/hay_dark.tres" id="2_hay_dark"]
+[ext_resource type="Material" path="res://game/assets/materials/timber.tres" id="3_timber"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/props/village/HideSpot.gd" id="4_HideSpot"]
+[ext_resource type="Material" path="res://game/assets/materials/village/hide_marker.tres" id="5_hide_marker"]
+[ext_resource type="Material" path="res://game/assets/materials/villager/hidden_icon.tres" id="6_hidden_icon"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 0.85
+bottom_radius = 1.15
+height = 1.5
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_2"]
+top_radius = 0.15
+bottom_radius = 0.85
+height = 0.8
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_3"]
+top_radius = 1.02
+bottom_radius = 1.04
+height = 0.14
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4"]
+top_radius = 0.02
+bottom_radius = 0.16
+height = 0.2
+radial_segments = 6
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_5"]
+top_radius = 0.025
+bottom_radius = 0.025
+height = 1.8
+radial_segments = 6
+rings = 1
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_6"]
+points = PackedVector3Array(1.15, 0, 0, 0.85, 1.5, 0, 0.99593, 0, 0.575, 0.73612, 1.5, 0.425, 0.575, 0, 0.99593, 0.425, 1.5, 0.73612, 0, 0, 1.15, 0, 1.5, 0.85, -0.575, 0, 0.99593, -0.425, 1.5, 0.73612, -0.99593, 0, 0.575, -0.73612, 1.5, 0.425, -1.15, 0, 0, -0.85, 1.5, 0, -0.99593, 0, -0.575, -0.73612, 1.5, -0.425, -0.575, 0, -0.99593, -0.425, 1.5, -0.73612, 0, 0, -1.15, 0, 1.5, -0.85, 0.575, 0, -0.99593, 0.425, 1.5, -0.73612, 0.99593, 0, -0.575, 0.73612, 1.5, -0.425)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_7"]
+points = PackedVector3Array(0.85, 0, 0, 0.15, 0.8, 0, 0.73612, 0, 0.425, 0.1299, 0.8, 0.075, 0.425, 0, 0.73612, 0.075, 0.8, 0.1299, 0, 0, 0.85, 0, 0.8, 0.15, -0.425, 0, 0.73612, -0.075, 0.8, 0.1299, -0.73612, 0, 0.425, -0.1299, 0.8, 0.075, -0.85, 0, 0, -0.15, 0.8, 0, -0.73612, 0, -0.425, -0.1299, 0.8, -0.075, -0.425, 0, -0.73612, -0.075, 0.8, -0.1299, 0, 0, -0.85, 0, 0.8, -0.15, 0.425, 0, -0.73612, 0.075, 0.8, -0.1299, 0.73612, 0, -0.425, 0.1299, 0.8, -0.075)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8"]
+size = Vector3(2.6, 2.4, 3.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_9"]
+size = Vector2(0.9, 0.9)
+
+[sub_resource type="QuadMesh" id="QuadMesh_10"]
+size = Vector2(0.55, 0.55)
+
+[node name="haystack_hide" type="Node3D" node_paths=PackedStringArray("hide_zone", "entry", "entry_marker", "hidden_icon")]
+editor_description = "Hiding spot: haystack, 2.3 m wide, 2.3 m tall. Casts gameplay shade (two frustum shapes). Dracula hides from Entry (+Z)."
+script = ExtResource("4_HideSpot")
+max_hide_time = 0
+hide_zone = NodePath("HideZone")
+entry = NodePath("Entry")
+entry_marker = NodePath("EntryMarker")
+hidden_icon = NodePath("HiddenIcon")
+
+[node name="Stack" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+mesh = SubResource("CylinderMesh_1")
+surface_material_override/0 = ExtResource("1_hay")
+
+[node name="Top" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
+mesh = SubResource("CylinderMesh_2")
+surface_material_override/0 = ExtResource("1_hay")
+
+[node name="Band" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+mesh = SubResource("CylinderMesh_3")
+surface_material_override/0 = ExtResource("2_hay_dark")
+cast_shadow = 0
+
+[node name="Tuft" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+mesh = SubResource("CylinderMesh_4")
+surface_material_override/0 = ExtResource("2_hay_dark")
+cast_shadow = 0
+
+[node name="Pitchfork" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.9703, 0.24192, 0, -0.23008, 0.92281, -0.30902, -0.07476, 0.29984, 0.95106, 0.95, 0.95, 0.55)
+mesh = SubResource("CylinderMesh_5")
+surface_material_override/0 = ExtResource("3_timber")
+cast_shadow = 0
+
+[node name="ShadowCaster" parent="." type="StaticBody3D"]
+collision_layer = 8
+collision_mask = 0
+
+[node name="StackShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+shape = SubResource("ConvexPolygonShape3D_6")
+
+[node name="TopShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("ConvexPolygonShape3D_7")
+
+[node name="HideZone" parent="." type="Area3D"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+editor_description = "Tap target (layer 5 hide_spot). Covers the prop and its Entry."
+
+[node name="Shape" parent="HideZone" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0.5)
+shape = SubResource("BoxShape3D_8")
+
+[node name="Entry" parent="." type="Marker3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.75)
+editor_description = "Where Dracula stands to hide. Must be on a non-solid grid cell reachable in shade."
+
+[node name="EntryMarker" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 1.75)
+mesh = SubResource("PlaneMesh_9")
+surface_material_override/0 = ExtResource("5_hide_marker")
+cast_shadow = 0
+
+[node name="HiddenIcon" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.85, 0)
+mesh = SubResource("QuadMesh_10")
+surface_material_override/0 = ExtResource("6_hidden_icon")
+cast_shadow = 0
+visible = false

@@ -1,13 +1,13 @@
 class_name ShadowRunHUD
 extends UIController
 
-## In-level HUD (portrait): top bar (~10%: pause, level name), play view (the level;
+## In-level HUD (portrait): top bar (~10%: pause, level name, exposure meter), play view (the level;
 ## taps / drags here move Dracula; only transient labels) and ONE sun control (SunInput):
 ##   * joystick mode: the play view runs to the bottom edge, SunJoystick floats bottom-right;
 ##   * slider mode: the SunControl strip takes the bottom ~15%, the play view ends above it.
 ## set_sun_mode() switches instantly; ShadowRunFeature picks the mode (saved setting). Layout is containers + stretch ratios in ShadowRunHUD.tscn; this script
 ## The SafeArea node is a SafeAreaMargin (ui/common): notch / gesture-bar insets + padding.
-## Listens to GameBus for exposure (drives the burn vignette only); everything else is called directly by ShadowRunFeature.
+## Listens to GameBus for exposure (drives the exposure meter and the burn vignette); everything else is called directly by ShadowRunFeature.
 ## All non-button controls use MOUSE_FILTER_IGNORE so desktop clicks reach the feature.
 
 signal pause_requested
@@ -21,11 +21,14 @@ signal sun_drag_ended
 ## Play view stretch ratio per sun mode (top bar 10, strip 15).
 @export var play_view_ratio_joystick: float = 90.0
 @export var play_view_ratio_slider: float = 75.0
+## Show the sun exposure meter in the top bar (fills while Dracula is in sunlight; full = he burns).
+@export var show_exposure_meter: bool = true
 
 @onready var _level_label: Label = %LevelLabel
 @onready var _pause_button: Button = %PauseButton
 @onready var _debug_button: Button = %DebugButton
 @onready var _vignette: ColorRect = %BurnVignette
+@onready var _meter: ExposureMeter = %ExposureMeter
 @onready var _title: Label = %TitleLabel
 @onready var _hint: Label = %HintLabel
 @onready var _play_view: Control = %PlayView
@@ -37,6 +40,8 @@ var _hint_tween: Tween
 var _mode: SunInput.Mode = SunInput.Mode.JOYSTICK
 var _controls_enabled: bool = true
 var _title_tween: Tween
+var _sun_locked: bool = false
+var _tutorial_tween: Tween
 
 func inject_services(registry: Node) -> void:
 	if not registry:
@@ -56,6 +61,7 @@ func _on_ready() -> void:
 	set_sun_mode(_mode)
 	_title.hide()
 	_hint.modulate.a = 0.0
+	_meter.visible = show_exposure_meter
 	_on_exposure_changed(0.0)
 
 func _exit_tree() -> void:
@@ -68,7 +74,7 @@ func bind_sun(sun: SunRig) -> void:
 
 func set_controls_enabled(enabled: bool) -> void:
 	_controls_enabled = enabled
-	active_sun_input().set_controls_enabled(enabled)
+	active_sun_input().set_controls_enabled(enabled and not _sun_locked)
 	_pause_button.disabled = not enabled
 
 func set_level_title(title: String, number: int) -> void:
@@ -104,7 +110,36 @@ func set_sun_mode(mode: SunInput.Mode) -> void:
 	_joystick.visible = joystick
 	_strip.visible = not joystick
 	_play_view.size_flags_stretch_ratio = play_view_ratio_joystick if joystick else play_view_ratio_slider
-	active_sun_input().set_controls_enabled(_controls_enabled)
+	active_sun_input().set_controls_enabled(_controls_enabled and not _sun_locked)
+
+## The level's sun runs by itself: chain the sun controls (they still show the sun's angle)
+## and stop them reading input.
+func set_sun_locked(locked: bool) -> void:
+	_sun_locked = locked
+	for control: SunInput in [_joystick, _strip]:
+		var lock := control.get_node_or_null("SunLock") as SunLock
+		if lock:
+			lock.visible = locked
+	active_sun_input().set_controls_enabled(_controls_enabled and not locked)
+
+func is_sun_locked() -> bool:
+	return _sun_locked
+
+## Countdown on the chained control: seconds until the sun's next move, or moving now.
+func set_sun_countdown(seconds_left: float, moving: bool) -> void:
+	var lock := active_sun_input().get_node_or_null("SunLock") as SunLock
+	if lock:
+		lock.set_countdown(seconds_left, moving)
+
+## Shows tutorial lines one after another in the hint banner, `seconds` each.
+func show_tutorial(lines: PackedStringArray, seconds: float) -> void:
+	if _tutorial_tween:
+		_tutorial_tween.kill()
+	_tutorial_tween = create_tween()
+	_tutorial_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	for line in lines:
+		_tutorial_tween.tween_callback(show_hint.bind(line, seconds - 0.65))
+		_tutorial_tween.tween_interval(seconds)
 
 func play_sun_blocked() -> void:
 	active_sun_input().play_blocked()
@@ -135,3 +170,4 @@ func _on_exposure_changed(value: float) -> void:
 	if not is_node_ready():
 		return
 	(_vignette.material as ShaderMaterial).set_shader_parameter("strength", clampf(value / 100.0, 0.0, 1.0))
+	_meter.set_value(value)

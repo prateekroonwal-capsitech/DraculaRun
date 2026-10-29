@@ -1,0 +1,59 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/village/barrel_wood.tres" id="1_wood"]
+[ext_resource type="Material" path="res://game/assets/materials/iron.tres" id="2_iron"]
+
+[sub_resource type="CylinderMesh" id="Mesh_lower"]
+top_radius = 0.41
+bottom_radius = 0.34
+height = 0.48
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Mesh_upper"]
+top_radius = 0.34
+bottom_radius = 0.41
+height = 0.48
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Mesh_hoop"]
+top_radius = 0.405
+bottom_radius = 0.405
+height = 0.05
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Mesh_rim"]
+top_radius = 0.35
+bottom_radius = 0.35
+height = 0.04
+radial_segments = 12
+rings = 1
+
+[node name="barrel" type="Node3D"]
+editor_description = "Wooden barrel from primitives: 0.82 m wide (belly), 0.96 m tall, base at y = 0. Visual only (the hiding spot owns the collision). No shadows: barrels don't cast gameplay shade."
+
+[node name="Lower" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.24, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_lower")
+surface_material_override/0 = ExtResource("1_wood")
+
+[node name="Upper" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_upper")
+surface_material_override/0 = ExtResource("1_wood")
+
+[node name="HoopMid" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.48, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_hoop")
+surface_material_override/0 = ExtResource("2_iron")
+
+[node name="RimTop" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.92, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_rim")
+surface_material_override/0 = ExtResource("2_iron")

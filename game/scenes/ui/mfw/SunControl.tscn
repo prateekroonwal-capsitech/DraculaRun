@@ -1,6 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://game/scenes/ui/mfw/SunControl.gd" id="1_sun"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunLock.tscn" id="9_lock"]
 
 [node name="SunControl" type="Control"]
 editor_description = "Bottom sun strip (~15% of the screen). Horizontal drag = sun azimuth, vertical drag = sun elevation. Touches that start here never become play-view taps."
@@ -16,3 +17,7 @@ script = ExtResource("1_sun")
 drag_sensitivity = 1.5
 key_azimuth_speed = 180.0
 key_elevation_speed = 180.0
+
+[node name="SunLock" parent="." instance=ExtResource("9_lock")]
+round_backdrop = false
+chain_extent = 0.32

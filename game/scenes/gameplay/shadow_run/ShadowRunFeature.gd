@@ -11,6 +11,13 @@ extends GameFeature
 ##     ShadeGrid, arm the sun's exposure guard → GameManager.start()
 ##   → goal reached: SaveManager.complete_level() → Level Complete panel (Next/Retry/Home)
 ##   → burned (exposure 100): ash-and-bats death → Game Over panel (Retry/Home)
+##   → caught (a villager's attack lands): bats death → Game Over ("caught")
+##
+## Stealth: VillagerController and HideSpot nodes anywhere under the level are found at
+## setup and wired here. Tapping a hiding spot (or ending a drag on it) walks Dracula to
+## its Entry through shade and hides him there: invisible to villagers, safe from the sun
+## (sensor shielded, sun guard off). Tapping elsewhere makes him leave, if his spot's cell
+## is still shaded.
 ##
 ## Gameplay systems (grid, sensor, sun, camera, previews) are scene nodes handed in via
 ## @export and configured here — they are not shared services. Shared services arrive
@@ -57,6 +64,8 @@ func set_state(new_state: LevelState) -> void:
 	_log("State transition: %s -> %s" % [_state_name(old_state), _state_name(new_state)])
 	state_changed.emit(new_state)
 
+	for v in _villagers:
+		v.set_active(state == LevelState.PLAYING or state == LevelState.PAUSED)
 	match state:
 		LevelState.PLAYING:
 			_running = true
@@ -137,12 +146,24 @@ func _state_name(s: LevelState) -> String:
 @export var edge_lead_blend_time: float = 0.2
 
 @export_group("Sun control")
+## On: the sun refuses angles that would put Dracula's footprint in sunlight (it stops at
+## the last safe angle and the control flashes red). Off (default): the sun moves freely;
+## sunlight fills the exposure meter and he burns when it is full.
+@export var sun_guard_enabled: bool = false:
+	set(v):
+		sun_guard_enabled = v
+		if sun_rig and _is_level_ready:
+			sun_rig.guard = _sun_is_safe if v and not level.auto_sun else Callable()
 ## Used until the player picks a mode in the Pause panel (then the saved choice wins).
 @export var default_sun_mode: SunInput.Mode = SunInput.Mode.JOYSTICK
 ## Camera distance behind Dracula per mode, so he sits in the lower-middle of the
 ## visible play view (joystick: view runs to the bottom; slider: view ends above the strip).
 @export var camera_distance_joystick: float = 4.0
 @export var camera_distance_slider: float = 5.5
+
+@export_group("Stealth")
+## Camera focus time on Dracula when a villager catches him (s).
+@export var caught_focus_time: float = 1.5
 
 @export_group("Intro")
 @export var title_time: float = 1.2
@@ -191,6 +212,13 @@ var _raw_path_points: PackedVector3Array = PackedVector3Array()
 var _touches: Dictionary = {}
 var _last_pinch_dist: float = -1.0
 var _queued_touch_events: Array[Dictionary] = []
+var _villagers: Array[VillagerController] = []
+var _hide_spots: Array[HideSpot] = []
+var _hidden_spot: HideSpot          # where Dracula is hidden (null = not hidden)
+var _hide_target: HideSpot          # spot he is walking to
+var _pending_hide: HideSpot         # hide tap made while the shade was updating
+var _pick_query: PhysicsRayQueryParameters3D
+var _auto_sun_clock: float = 0.0
 
 func _queue_touch_event(type: String, index: int, pos: Vector2) -> void:
 	if type == "MOVE" and not _queued_touch_events.is_empty():
@@ -248,6 +276,10 @@ func _ready() -> void:
 	set_process(false)
 	set_physics_process(false)      # PDF §4: idle until the level starts
 	_ray_query = PhysicsRayQueryParameters3D.new()
+	_pick_query = PhysicsRayQueryParameters3D.new()
+	_pick_query.collide_with_areas = true
+	_pick_query.collide_with_bodies = false
+	_pick_query.collision_mask = HideSpot.HIDE_LAYER_BIT
 	if not _initialized:
 		var reg: Node = get_node_or_null("/root/ServiceRegistry")
 		if reg:
@@ -367,16 +399,21 @@ func _setup() -> void:
 	sensor.exposure_changed.connect(_on_exposure_changed)
 	sensor.burned_out.connect(_on_burned_out)
 	sensor.reset()
-	sun_rig.guard = _sun_is_safe
+	sun_rig.guard = _sun_is_safe if sun_guard_enabled and not level.auto_sun else Callable()
 	sun_rig.sun_moved.connect(_on_sun_moved)
 	sun_rig.settled.connect(_on_sun_settled)
 	sun_rig.guard_blocked.connect(_on_guard_blocked)
 	grid.shade_updated.connect(_refresh_region)
 	level.goal.reached.connect(_on_goal_reached)
 	dracula.arrived.connect(_refresh_region)
+	dracula.arrived.connect(_on_dracula_arrived)
+	_setup_stealth()
 	dracula.death_finished.connect(_on_death_finished)
 	hud.bind_sun(sun_rig)
 	hud.set_level_title(level.level_title, level.level_number)
+	hud.set_sun_locked(level.auto_sun)
+	if level.auto_sun:
+		hud.set_sun_countdown(level.auto_sun_hold_time + level.auto_sun_first_hold_bonus, false)
 	hud.pause_requested.connect(request_pause)
 	hud.debug_toggle_requested.connect(debug_overlay.toggle)
 	hud.sun_drag_started.connect(_on_sun_drag_started)
@@ -389,7 +426,9 @@ func _setup() -> void:
 		_game.reset()
 	_refresh_region()
 	hud.show_title("LEVEL %d" % level.level_number, title_time)
-	if level.hint != "":
+	if not level.tutorial_steps.is_empty():
+		hud.show_tutorial(level.tutorial_steps, level.tutorial_step_time)
+	elif level.hint != "":
 		hud.show_hint(level.hint, 5.0)
 
 	# 8. Warm-up GPU shaders and particles behind loading curtain
@@ -463,6 +502,8 @@ func _physics_process(delta: float) -> void:
 			sensor.reset()
 
 	dracula.set_burn_state(sensor.exposure, sensor.exposure_fraction)
+	if level.auto_sun:
+		_step_auto_sun(delta)
 	if _finger == NO_FINGER:
 		return
 	if not _move_dragging:
@@ -565,13 +606,32 @@ func _update_drag_target_and_marker(delta: float) -> void:
 
 ## Exposure guard: would Dracula's footprint still be fully shaded with the sun at `dir`?
 func _sun_is_safe(dir: Vector3) -> bool:
-	if not _running or not dracula.is_active():
-		return true
+	if not _running or not dracula.is_active() or _hidden_spot != null:
+		return true   # hidden: the sun can't reach him
 	var space := dracula.get_world_3d().direct_space_state
 	for p in dracula.get_sample_points():
 		if not ShadowSensor.is_point_shaded(space, _ray_query, p.global_position, dir, sensor.ray_length, sensor.caster_mask):
 			return false
 	return true
+
+## True when moves may be planned on the shade grid. Normally the sun must be at rest and
+## the shade exact; on auto-sun levels the player keeps moving while the sun sweeps, using
+## the shade as it is being updated (about 10 times a second).
+func _shade_ready() -> bool:
+	return level.auto_sun or (sun_rig.is_settled() and not level.grid.is_busy())
+
+## Auto-sun levels: steer the sun along the level's schedule (ShadowLevel.auto_sun_state).
+func _step_auto_sun(delta: float) -> void:
+	_auto_sun_clock += delta
+	var st := level.auto_sun_state(_auto_sun_clock)
+	var angle: Vector2 = st.angle
+	if absf(angle.x - sun_rig.target_azimuth) > 0.001 or absf(angle.y - sun_rig.target_elevation) > 0.001:
+		sun_rig.set_target(angle.x, angle.y)
+	hud.set_sun_countdown(st.time_left, st.moving)
+
+## Schedule time on an auto-sun level (s since PLAYING started) and the current phase.
+func auto_sun_state() -> Dictionary:
+	return level.auto_sun_state(_auto_sun_clock)
 
 func _on_sun_moved(_az: float, _el: float) -> void:
 	if level and level.grid.cols > 0:
@@ -771,6 +831,10 @@ func _on_finger_moved(pos: Vector2) -> void:
 func handle_tap(viewport_pos: Vector2) -> void:
 	if _sun_dragging or not hud.is_in_play_view(viewport_pos):
 		return
+	var spot := pick_hide_spot(viewport_pos)
+	if spot:
+		go_hide(spot)
+		return
 	var world: Variant = ground_point(viewport_pos)
 	if world != null:
 		move_to(world)
@@ -806,6 +870,13 @@ func is_move_dragging() -> bool:
 	return _move_dragging
 
 func _begin_move_drag() -> void:
+	_hide_target = null
+	if _hidden_spot:
+		if not _can_leave_hiding():
+			_cancel_move_drag()
+			dracula.play_no_cue()
+			return
+		_leave_hide()
 	_move_dragging = true
 	_drag_dest = Vector2i(-1, -1)
 	_hop_label = -1
@@ -830,7 +901,7 @@ func _begin_move_drag() -> void:
 ## own shade region and waits there; across a small gap he hops only after the finger
 ## has been held over the far shade for drag_hop_hold_time.
 func _drag_update() -> void:
-	if _sun_dragging or not sun_rig.is_settled() or level.grid.is_busy():
+	if _sun_dragging or not _shade_ready():
 		return   # he stands still while the sun moves; shade must be exact
 	if dracula.is_moving() and dracula.has_pending_hop():
 		return   # never re-route mid-hop
@@ -893,6 +964,12 @@ func _end_move_drag(viewport_pos: Vector2) -> void:
 	_edge_zone_timer = 0.0
 	_edge_lead_blend = 0.0
 	dracula.set_drag_state(false, false)
+	var spot := pick_hide_spot(viewport_pos) if hud and hud.is_in_play_view(viewport_pos) else null
+	if spot:
+		_drag_world_pos = null
+		move_marker.fade_out()
+		go_hide(spot)
+		return
 	var grid := level.grid
 	var world: Variant = _drag_world_pos
 	if world == null and hud and hud.is_in_play_view(viewport_pos):
@@ -902,7 +979,7 @@ func _end_move_drag(viewport_pos: Vector2) -> void:
 		_settle_marker_on_drag_dest()
 		dracula.play_no_cue()
 		return
-	if _sun_dragging or not sun_rig.is_settled() or grid.is_busy():
+	if _sun_dragging or not _shade_ready():
 		move_marker.fade_out()
 		_pending_tap = world   # answered (or refused) once the shade is exact
 		return
@@ -963,10 +1040,19 @@ func _walk_cells(from: Vector2i, to: Vector2i, allow_hops: bool, run: bool) -> b
 func move_to(world: Vector3) -> void:
 	if not _running or _finished or _sun_dragging:
 		return
-	if not sun_rig.is_settled() or level.grid.is_busy():
+	if not _shade_ready():
 		_pending_tap = world   # shade still updating: answer as soon as it is exact
+		_pending_hide = null
 		return
+	_hide_target = null
 	var grid := level.grid
+	if _hidden_spot:
+		# He only leaves his hiding spot for a spot he can actually walk to.
+		if not _can_leave_hiding() or not _can_walk_to(world):
+			move_marker.play_at(world, false)
+			dracula.play_no_cue()
+			return
+		_leave_hide()
 	var target := grid.cell_at(world)
 	var from := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
 	if target == from and not dracula.is_moving():
@@ -990,11 +1076,157 @@ func raw_path() -> PackedVector3Array:
 	return _raw_path_points if dracula.is_moving() else PackedVector3Array()
 
 func _try_pending_tap() -> void:
-	if _pending_tap == null or not sun_rig.is_settled() or level.grid.is_busy():
+	if not _shade_ready():
+		return
+	if _pending_hide:
+		var spot := _pending_hide
+		_pending_hide = null
+		go_hide(spot)
+		return
+	if _pending_tap == null:
 		return
 	var w: Vector3 = _pending_tap
 	_pending_tap = null
 	move_to(w)
+
+# ── Stealth: villagers and hiding spots ───────────────────────────────────
+
+func _setup_stealth() -> void:
+	_villagers.clear()
+	_hide_spots.clear()
+	for node in level.find_children("*", "Node3D", true, false):
+		if node is VillagerController:
+			var v := node as VillagerController
+			v.setup(dracula, level.grid, sensor, _bus)
+			v.caught.connect(_on_caught)
+			_villagers.append(v)
+		elif node is HideSpot:
+			var spot := node as HideSpot
+			spot.expired.connect(_on_hide_expired.bind(spot))
+			_hide_spots.append(spot)
+	_log("stealth: %d villagers, %d hiding spots" % [_villagers.size(), _hide_spots.size()])
+
+func villagers() -> Array[VillagerController]:
+	return _villagers
+
+func hide_spots() -> Array[HideSpot]:
+	return _hide_spots
+
+func hidden_spot() -> HideSpot:
+	return _hidden_spot
+
+## The hiding spot whose HideZone (physics layer 5) is under a viewport position.
+func pick_hide_spot(viewport_pos: Vector2) -> HideSpot:
+	if _hide_spots.is_empty():
+		return null
+	var cam := get_viewport().get_camera_3d()
+	_pick_query.from = cam.project_ray_origin(viewport_pos)
+	_pick_query.to = _pick_query.from + cam.project_ray_normal(viewport_pos) * 200.0
+	var hit := level.get_world_3d().direct_space_state.intersect_ray(_pick_query)
+	if hit.is_empty():
+		return null
+	var node := hit.collider as Node
+	while node and not node is HideSpot:
+		node = node.get_parent()
+	return node as HideSpot
+
+## Walk to `spot` through shade and hide there (or hide at once if he is already there).
+func go_hide(spot: HideSpot) -> void:
+	if not _running or _finished or _sun_dragging or spot == null:
+		return
+	var grid := level.grid
+	var entry := spot.entry_position()
+	if spot == _hidden_spot:
+		move_marker.play_at(entry, true)
+		return
+	if not _shade_ready():
+		_pending_hide = spot   # answered once the shade is exact
+		_pending_tap = null
+		return
+	if _hidden_spot and not _can_leave_hiding():
+		move_marker.play_at(entry, false)
+		dracula.play_no_cue()
+		return
+	var entry_cell := grid.cell_at(entry)
+	var here := dracula.global_position
+	if Vector2(here.x - entry.x, here.z - entry.z).length() <= grid.cell_size and not dracula.is_moving():
+		_leave_hide()
+		_enter_hide(spot)
+		return
+	var from := grid.nearest_walkable(grid.cell_at(here), 1)
+	if not grid.in_bounds(from) or not grid.is_walkable(entry_cell) or grid.find_path(from, entry_cell, true).is_empty():
+		move_marker.play_at(entry, false)
+		dracula.play_no_cue()
+		return
+	_leave_hide()
+	_walk_cells(from, entry_cell, true, false)
+	_hide_target = spot
+	move_marker.play_at(entry, true)
+
+func _on_dracula_arrived() -> void:
+	var spot := _hide_target
+	_hide_target = null
+	if spot == null or not _running:
+		return
+	var entry := spot.entry_position()
+	var here := dracula.global_position
+	if Vector2(here.x - entry.x, here.z - entry.z).length() <= level.grid.cell_size * 1.2:
+		_enter_hide(spot)
+
+func _enter_hide(spot: HideSpot) -> void:
+	_hidden_spot = spot
+	_hide_target = null
+	dracula.hide_in(spot.global_position)
+	sensor.shielded = true
+	spot.set_occupied(true)
+	for v in _villagers:
+		v.set_target_hidden(true)
+	move_marker.fade_out()
+	if _bus:
+		_bus.dracula_hidden_changed.emit(true)
+
+func _leave_hide() -> void:
+	if _hidden_spot == null:
+		return
+	_hidden_spot.set_occupied(false)
+	_hidden_spot = null
+	dracula.leave_hiding()
+	sensor.shielded = false
+	for v in _villagers:
+		v.set_target_hidden(false)
+	if _bus:
+		_bus.dracula_hidden_changed.emit(false)
+
+## Max hide time ran out: he is pushed back out at the Entry.
+func _on_hide_expired(spot: HideSpot) -> void:
+	if spot == _hidden_spot and _running:
+		_leave_hide()
+		dracula.play_flinch()
+
+## His hiding cell (or a neighbour) is still shaded, so stepping out is safe.
+func _can_leave_hiding() -> bool:
+	var grid := level.grid
+	return grid.in_bounds(grid.nearest_walkable(grid.cell_at(dracula.global_position), 1))
+
+func _can_walk_to(world: Vector3) -> bool:
+	var grid := level.grid
+	var from := grid.nearest_walkable(grid.cell_at(dracula.global_position), 1)
+	var target := grid.cell_at(world)
+	if not grid.in_bounds(from) or not grid.is_walkable(target):
+		return false
+	return from == target or not grid.find_path(from, target, true).is_empty()
+
+## A villager's attack landed: the run fails with reason "caught" (→ GameBus.game_over).
+func _on_caught(_villager: VillagerController) -> void:
+	if state != LevelState.PLAYING or not _running:
+		return
+	set_state(LevelState.DEAD)
+	_running = false
+	_cancel_move_drag()
+	sensor.set_active(false)
+	hud.set_controls_enabled(false)
+	run_camera.focus_death(caught_focus_time)
+	dracula.play_caught_death()
 
 # ── Region preview / goal ─────────────────────────────────────────────────
 

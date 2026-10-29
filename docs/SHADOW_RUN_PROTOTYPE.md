@@ -20,6 +20,7 @@ composition root, and services are injected.
 | Level validator | F6 on `level/LevelValidatorRunner.tscn`, or headless (below) |
 | Shade self-check | F6 on `shadow/ShadowSensorSelfCheck.tscn`, or headless (below) |
 | End-to-end test | `game/scenes/test/ShadowRunSoakTest.tscn` (headless, below) |
+| Villager stealth test | `game/scenes/test/VillagerStealthTest.tscn` (headless, below) |
 
 ```bash
 godot --headless --path . res://game/scenes/gameplay/shadow_run/level/LevelValidatorRunner.tscn
@@ -39,6 +40,10 @@ godot --headless --path . res://game/scenes/gameplay/shadow_run/shadow/ShadowSen
 
 ```bash
 godot --headless --path . res://game/scenes/test/ShadowRunSoakTest.tscn
+```
+
+```bash
+godot --headless --path . res://game/scenes/test/VillagerStealthTest.tscn
 ```
 
 Each tool exits with code 0 on success.
@@ -130,7 +135,7 @@ identical. Exactly one is shown; the Pause panel switch swaps them instantly and
 While the sun is moving, by either control or the keys, Dracula stops at the next cell
 and stands still.
 
-**Exposure guard.** The sun cannot be turned to an angle that would put Dracula's
+**Free sun (default) / exposure guard.** By default (`ShadowRunFeature.sun_guard_enabled` off) the sun turns freely: if it lights Dracula, the exposure meter in the top bar fills and he burns when it is full (about 1.2 s in full sun), so swing it and move him back into shade in time. With `sun_guard_enabled` on, the old guard applies: the sun cannot be turned to an angle that would put Dracula's
 footprint in sunlight. It stops at the last safe angle, the active control flashes red
 (joystick rim / strip edge) and Dracula flinches (at most every 0.4 s while a held
 joystick keeps pushing). Moving the sun alone can never burn him.
@@ -182,7 +187,11 @@ ignores all input, keys included.
 
 ## Failure
 
-Exposure (no on-screen bar) is a safety net driven by `ShadowSensor`: three foot-level points on
+Two ways to lose: **sunlight** (below) and **caught** by a villager (see *Village:
+villagers and hiding*). Both end in Game Over (`GameBus.game_over("sunlight" / "caught")`;
+the panel reads "BURNED TO ASH" / "CAUGHT!").
+
+Exposure (the sun meter in the top bar) is driven by `ShadowSensor`: three foot-level points on
 Dracula ray-cast toward the sun. It rises whenever he is exposed, for example mid-hop, and
 recovers in shade. At 100 the burn → ash-and-bats death plays, then Game Over
 (Retry / Home). All burn feedback is kept: smoke and embers, the emissive rim, the screen
@@ -258,15 +267,121 @@ Home's Play opens Level01 and shows "Levels cleared: N".
 | 2 · Two Alleys (start el 38°) | **Branching.** A chapel splits the street. Left route: switch the sun early, in the spire's shadow in front of the chapel, and use the chapel's shadow down the left alley. Right route: use the chapel's shadow down the right alley at the start angle, then switch late at the gargoyle by the exit. | Start −35°; one switch, early or late |
 | 3 · The Narrow Gate (start el 32°) | **Timing.** A 2.4 m gate between castle walls. With the sun nearly ahead, the **covered wagon's** shadow fills the gap, so the wagon is both what blocks the path and what lets you through. Past it, swing further left so the wagon throws shade beside itself, slip around it, and reach the crypt in the left buildings' shadow. | Start +30°; two adjustments |
 
-All levels use the full default ranges (azimuth −80…80°, elevation 15…65°).
+| 4 · Village Watch (`levels/Level04.tscn`) | **Stealth + a sun you can't steer.** The sun runs by itself on a loop (hold 8 s, sweep 3 s). Before each sweep, get Dracula onto shade that lasts through it, or into a hiding spot. **A:** wait out the first sweep by the start. **B:** run up the street and slip past the red villager (haystack to hide in) to the crates. **C:** hide in the barrels while the sun swings past, then slip by the blue lantern-bearer to the crypt. A six-line tutorial plays at the start. | Auto sun: keys (−45°, 25°) → (−15°, 20.4°) → (60°, 18°) → (−17.5°, 18°), loop; first hold +16 s |
 
-`level/LevelValidatorRunner.tscn` (driven by `level_solver.tres`) proves each level is
+Levels 1–3 use the full default ranges (azimuth −80…80°, elevation 15…65°).
+
+`level/LevelValidatorRunner.tscn` (driven by `level_solver.tres`, plus `patrol_check.tres` on
+levels with villagers) proves each level is
 **solvable**, **needs at least one sun adjustment**, and is **not trivial**: no single sun
 sweep from the start spot connects straight to the goal. It searches the sun on both axes
 (21 azimuth × 6 elevation samples). Its search moves the sun only while
 Dracula stands on a pivot cell that stays shaded, with a margin, at both sample angles and
 halfway between, mirroring the in-game guard. The end-to-end test then replays those
 plans in the real game.
+
+## Auto sun (levels whose sun runs by itself)
+
+`ShadowLevel` → **Auto sun** group: `auto_sun` on, `auto_sun_keys` (azimuth, elevation
+pairs), `auto_sun_hold_time`, `auto_sun_move_time`, `auto_sun_first_hold_bonus`. The sun
+holds at each key, sweeps (smoothstep) to the next, and loops after the last key
+(`ShadowLevel.auto_sun_state(t)` is the schedule; `ShadowRunFeature` steers the `SunRig`
+along it while PLAYING). The player can't move the sun: both sun controls show
+`ui/mfw/SunLock.tscn` (chains and a padlock over the control, still showing the sun's
+position) with a countdown ("Sun moves in N" / "The sun is moving…"), and the guard is
+off. Dracula can still be moved during a sweep (taps, drags and hiding use the shade as it
+updates, about 10 times a second). Dracula burns if the
+sweep lights him (exposure meter), so park him on shade that lasts or in a hiding spot.
+
+Validation: `LevelSolver.solve_schedule()` (used automatically for auto-sun levels) walks
+the loop: in each hold Dracula may run (`run_speed` 8 m/s) anywhere in his shade within the
+hold time, and must end it on a cell whose footprint stays shaded at every sampled angle of
+the next sweep (or on a hiding spot's Entry), up to `max_cycles` loops. The patrol check then
+runs on that route.
+
+**Tutorial:** `ShadowLevel` → **Tutorial** group: `tutorial_steps` (lines) and
+`tutorial_step_time`. They play one after another in the hint banner at level start
+(instead of `hint`).
+
+## Village: villagers and hiding
+
+**Hiding spots** (`props/village/hide/*.tscn`: barrels, haystack, covered cart, crate stack;
+script `props/village/HideSpot.gd`):
+
+- **Tap** a hiding spot (its `HideZone`, physics layer 5 `hide_spot`), or **end a drag** on
+  it: Dracula takes the normal shade path to its `Entry` (a dashed ring on the ground) and
+  hides. With no shaded route he shakes his head. He tucks into the prop (shrinks, then
+  disappears) and a closed-eye icon shows above the spot.
+- **Hidden** = invisible to villagers **and** safe from the sun: the sensor is shielded and
+  the sun guard is off, so the sun can be swung freely while he hides (a hiding spot is a
+  free pivot).
+- **Tap anywhere else** (or start a drag) to leave and go there. He only leaves when the
+  cell he hides on (or a neighbour) is shaded and the target is reachable; otherwise he stays
+  hidden and shakes his head.
+- `max_hide_time` per spot (0 = unlimited): the icon's ring empties, then he is pushed out
+  at the Entry.
+
+**Villagers** (`villager/Villager.tscn`, inherited from `assets/models/Villager/villager.glb`;
+script `villager/VillagerController.gd`):
+
+- **Patrol:** walks the points of its `patrol_path` (a `Path3D` in the level) at
+  `walk_speed`, waits `wait_time` at each point playing LookAround, turning smoothly
+  (`turn_speed_degrees`). `patrol_mode` LOOP or PING_PONG. The patrol is a fixed timeline,
+  so the validator can simulate it exactly.
+- **Vision:** a cone (`vision_range` 6 m, `vision_angle` 70°) drawn on the ground, plus a
+  line-of-sight ray from the eye to Dracula's chest that walls and props (`obstacle` and
+  `shadow_caster` layers) block. While chasing or searching the cone widens
+  (`alert_angle_multiplier`). The drawn cone is not clipped by walls (only detection is).
+- **Detection meter** (eye icon above the head, filling white → amber → red, with a "?" /
+  "!" label): fills while he is seen, `sun_multiplier` (2×) in sunlight and
+  `shade_multiplier` (0.5×) in shade (`time_to_spot` 1.2 s at 1×: 0.6 s in sun, 2.4 s in
+  shade); fills **instantly** within `lantern_spot_radius` (1.8 m) of the lantern; drains at
+  `drain_rate` out of view.
+- **States:** Patrol → Suspicious (meter rising: stops, faces him, LookAround) → Alert
+  (meter full: Alert clip) → Chase (Run, ground A* that ignores sunlight,
+  `ShadeGrid.find_ground_path`) → Attack within `attack_range` (Attack clip; the hit at
+  `attack_hit_time` fails the run with reason `"caught"`). If he hides or breaks line of
+  sight first: Search the last seen spot (`search_time`), then Return and resume the patrol
+  where it left off.
+- **Look:** `tunic_color`, `vest_color`, `cap_color`, `trousers_color` are per-instance
+  shader parameters (`villager_cloth.gdshader`), shown live in the editor (`@tool`). A warm
+  `OmniLight3D` rides the `Lantern` bone (`lantern_range`, `lantern_energy`). The mesh is on
+  render layer 2 (Character) so it reads in shade.
+
+**Wiring:** `ShadowRunFeature` finds every `VillagerController` and `HideSpot` under the
+level at setup, calls `villager.setup(dracula, grid, sensor, bus)`, and keeps villagers
+active while the level is PLAYING. `GameBus` gained `villager_alerted(villager)` and
+`dracula_hidden_changed(hidden)` for audio / haptics hooks.
+
+### How to place a villager and its patrol
+
+1. Under the level's **Villagers** node, add a **Path3D** (e.g. `GuardPatrol`) and click its
+   points on the ground with the curve tool. Each point is a stop; keep the legs off walls
+   and props.
+2. Instance `villager/Villager.tscn` under **Villagers**, put it on the first point, and set
+   **patrol_path** to the Path3D. Pick `patrol_mode`, `wait_time`, `walk_speed`, and
+   `start_time_offset` to de-sync villagers.
+3. Recolour with the **Clothing** colours; tune **Vision**, **Detection**, **Chase** and
+   **Lantern** on the instance.
+4. Add hiding spots from `props/village/hide/` near each watched stretch; keep each
+   **Entry** marker on open ground reachable in shade.
+5. Run `LevelValidatorRunner.tscn`: it lists every chokepoint on the solution route, the
+   villager's longest gap there, and the nearest hiding spot.
+
+### Village props
+
+`props/village/`: `cottage_small` / `cottage_large` (half-timbered, casters), `stone_well`
+(caster), `lamp_post` (warm light, solid only), `fence_section` (solid only), `cobble_road`
+(visual; world-space cobble shader, scale it to resize), `barrel.tscn` (a primitive
+barrel, 0.96 m; the imported `wooden_barrel.glb` is not used). Every prop is primitives + `.tres`
+materials (`assets/materials/village/`). Casters carry `ShadowCaster` shapes that match their
+shadow-casting meshes; small details (timber frames, windows, doors) and props without
+gameplay shade (lamp posts, fences, barrels) don't cast shadows, so drawn shadows always
+equal the shade grid.
+
+**Dusk lighting** is a per-level override of the shared shell: the level sets
+`Game/WorldEnvironment.environment = assets/environments/dusk_village.tres` (warm horizon,
+blue-violet ambient, light depth fog) and a warmer, dimmer `Game/SunRig` sun colour/energy.
 
 ## How to build a level in the editor
 
@@ -323,7 +438,7 @@ width is visible but less depth ahead.
 
 **Layout** (portrait 1080×1920, `canvas_items` / `expand`, locked portrait, safe-area padding):
 
-1. **Top bar, 10%:** pause, level label (no exposure bar; exposure only drives the burn vignette).
+1. **Top bar, 10%:** pause, level label, exposure meter (`ui/mfw/ExposureMeter.gd`: a sun that fills red plus a bar; `ShadowRunHUD.show_exposure_meter`). Exposure also drives the burn vignette.
 2. **Play view:** taps and drags happen here; nothing covers it except transient labels
    and, in dial mode, the dial. Dial mode: 90%, down to the bottom edge (camera
    `distance` 4.0 m). Slider mode: 75%, ending above the strip (camera 5.5 m). Either way
@@ -366,7 +481,14 @@ Rendered shadows and green/blue cells must coincide; captures confirmed they do.
 | `Game/ShadowRunFeature` | Touch: `drag_start_distance` 25 px, `drag_start_time` 0.15 s, `drag_repath_rate` 12/s, `drag_hop_hold_time` 0.2 s, `edge_penalty` 2. Sun control: `default_sun_mode` (Joystick), `camera_distance_joystick` 3.6, `camera_distance_slider` 5.5. `title_time`, F6 fallback |
 | `Game/RunCamera` | `height`, `distance`, `pitch_degrees`, `fov`, `forward_smoothing`, death cam |
 | `Game/MoveMarker` (`fx/MoveMarker.tscn`) | Ring size, `tap_ok` / `tap_fail` materials, `pulse_time`, `start_scale`, drag `follow_rate` |
-| `level/level_solver.tres` | `angle_step` (2.5°), `check_midpoints` (off), `goal_radius`, `max_adjustments` (8) |
+| `level/level_solver.tres` | `angle_step` (2.5°), `check_midpoints` (off), `goal_radius`, `max_adjustments` (8); auto sun: `run_speed` (8), `max_cycles` (3) |
+| `LevelNN` root (`ShadowLevel`), auto sun / tutorial | `auto_sun`, `auto_sun_keys`, `auto_sun_hold_time`, `auto_sun_move_time`, `auto_sun_first_hold_bonus`; `tutorial_steps`, `tutorial_step_time` |
+| `ui/mfw/SunLock.tscn` | chain / lock / dim colours, `link_length`, `link_width`, `link_thickness`, `chain_extent`, `lock_size`, `round_backdrop`, countdown texts |
+| `level/patrol_check.tres` | `time_step` (0.1 s), `dracula_speed` (8), `margin_time` (0.5 s), `max_hide_distance` (8 m) |
+| `Villagers/<Villager>` (`villager/Villager.tscn`) | Clothing colours; Patrol `patrol_path`, `patrol_mode`, `walk_speed` 1.5, `wait_time` 2, `start_time_offset`, `turn_speed_degrees` 300; Vision `vision_range` 6, `vision_angle` 70, `alert_angle_multiplier` 1.8, `target_height` 1.1; Detection `time_to_spot` 1.2, `sun_multiplier` 2, `shade_multiplier` 0.5, `lantern_spot_radius` 1.8, `drain_rate` 0.4, `suspicious_threshold` 0.05; Chase `run_speed` 3.8, `attack_range` 1.2, `attack_hit_time` 0.45, `search_time` 3, `repath_interval` 0.25; Lantern `lantern_range` 3.5, `lantern_energy` 1.4; Animation `walk_clip_speed` 1.4, `run_clip_speed` 3.6, `blend_time` 0.2; cone colours |
+| `props/village/hide/*` (`HideSpot`) | `max_hide_time` (0 = unlimited), `icon_fade_time` |
+| `Game/Dracula` | Hiding: `hide_time` 0.25, `hide_tuck` 0.6, `hide_scale` 0.2; Caught: `caught_recoil_degrees`, `caught_recoil_time`, `caught_vanish_time`, `caught_linger_time` |
+| `Game/ShadowRunFeature` | Stealth: `caught_focus_time` 1.5 s; Sun control: `sun_guard_enabled` (off = free sun, burn by the exposure meter) |
 | `LevelValidatorRunner.tscn` | `min_window_degrees` (8°); per level: `ShadowLevel.min_sun_adjustments` |
 
 ## Verification done
@@ -387,6 +509,20 @@ Rendered shadows and green/blue cells must coincide; captures confirmed they do.
   with the rendered shadows, framing at 9:16, 9:20 and 3:4.
 
 ## Known issues / not done
+
+- **Village: 60 FPS on a phone is not measured.** The level has about 420 mesh instances
+  (mostly small timber-frame boxes; frustum culling keeps roughly a third on screen), 5 lamp
+  lights and 2 lantern lights (no omni shadows), fog, and up to two villager sight rays per
+  frame. Desktop runs at 100 FPS. If a phone struggles, drop timber details first.
+- **The patrol check is "gaps + hiding spots", not a time-expanded search.** It proves every
+  watched chokepoint on the solver's route has an unwatched window long enough to run through
+  and a hiding spot within `max_hide_distance`; it does not plan the exact waits. It counts
+  any sighting as instant (the real meter needs time), so it is conservative.
+- **Drawn vision cones aren't clipped by walls** (that would need runtime meshes); detection is.
+- **The end-to-end test freezes the villagers** while replaying the solver's plan (hide steps
+  still go through real taps); villager behaviour is covered by `VillagerStealthTest`.
+- **Three Level 1 turning/drag checks in the end-to-end test also fail on the commit before
+  the village work** ("not back to Idle after arriving" and two drag-release checks).
 
 - **60 FPS on a mid-range Android device has not been measured** (no device available).
   The shade budget is about 3 ms per frame while dragging (estimated from desktop ray cost

@@ -12,8 +12,8 @@ config_version=5
 
 config/name="DraculaRun"
 run/main_scene="res://game/scenes/boot/Boot.tscn"
-config/features=PackedStringArray("4.7", "Mobile")
 config/quit_on_go_back=false
+config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -76,6 +76,7 @@ toggle_debug_overlay={
 3d_physics/layer_2="player"
 3d_physics/layer_3="obstacle"
 3d_physics/layer_4="shadow_caster"
+3d_physics/layer_5="hide_spot"
 
 [physics]
 

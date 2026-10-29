@@ -1,0 +1,7 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://game/assets/shaders/hide_marker.gdshader" id="1_sh"]
+
+[resource]
+render_priority = -1
+shader = ExtResource("1_sh")

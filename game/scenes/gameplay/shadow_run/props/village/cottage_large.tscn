@@ -1,0 +1,344 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/village/stone_base.tres" id="1_stone_base"]
+[ext_resource type="Material" path="res://game/assets/materials/village/whitewash.tres" id="2_whitewash"]
+[ext_resource type="Material" path="res://game/assets/materials/village/timber_dark.tres" id="3_timber_dark"]
+[ext_resource type="Material" path="res://game/assets/materials/village/roof_tile.tres" id="4_roof_tile"]
+[ext_resource type="Material" path="res://game/assets/materials/village/door_wood.tres" id="5_door_wood"]
+[ext_resource type="Material" path="res://game/assets/materials/village/window_warm.tres" id="6_window_warm"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+size = Vector3(6.1, 0.45, 4.5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2"]
+size = Vector3(6, 2.05, 4.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3"]
+size = Vector3(6.2, 2, 4.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+size = Vector3(6.3, 0.2, 5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_9"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_10"]
+size = Vector3(0.12, 1.8, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_11"]
+size = Vector3(6.2, 0.12, 0.07)
+
+[sub_resource type="BoxMesh" id="BoxMesh_12"]
+size = Vector3(6.2, 0.12, 0.07)
+
+[sub_resource type="BoxMesh" id="BoxMesh_13"]
+size = Vector3(6.2, 0.096, 0.065)
+
+[sub_resource type="BoxMesh" id="BoxMesh_14"]
+size = Vector3(1.51283, 0.096, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_15"]
+size = Vector3(1.51283, 0.096, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_16"]
+size = Vector3(0.12, 2.05, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_17"]
+size = Vector3(0.12, 2.05, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_18"]
+size = Vector3(0.12, 2.05, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_19"]
+size = Vector3(0.12, 2.05, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_20"]
+size = Vector3(6, 0.12, 0.07)
+
+[sub_resource type="BoxMesh" id="BoxMesh_21"]
+size = Vector3(6, 0.12, 0.07)
+
+[sub_resource type="BoxMesh" id="BoxMesh_22"]
+size = Vector3(6, 0.096, 0.065)
+
+[sub_resource type="PrismMesh" id="PrismMesh_23"]
+size = Vector3(5.7, 2.4, 6.6)
+
+[sub_resource type="PrismMesh" id="PrismMesh_24"]
+size = Vector3(5, 2.15, 0.1)
+
+[sub_resource type="PrismMesh" id="PrismMesh_25"]
+size = Vector3(5, 2.15, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_26"]
+size = Vector3(0.6, 3.3, 0.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_27"]
+size = Vector3(0.95, 1.85, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_28"]
+size = Vector3(1.2, 0.15, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_29"]
+size = Vector3(0.7, 0.65, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_30"]
+size = Vector3(0.7, 0.65, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_31"]
+size = Vector3(0.6, 0.6, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_32"]
+size = Vector3(0.6, 0.6, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_33"]
+size = Vector3(0.6, 0.6, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_34"]
+size = Vector3(0.08, 0.6, 0.6)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_35"]
+size = Vector3(6.1, 2.5, 4.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_36"]
+size = Vector3(6.2, 2, 4.9)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_37"]
+points = PackedVector3Array(-3.3, 0, -2.85, 3.3, 0, -2.85, 3.3, 0, 2.85, -3.3, 0, 2.85, -3.3, 2.4, 0, 3.3, 2.4, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_38"]
+size = Vector3(0.6, 3.3, 0.6)
+
+[node name="cottage_large" type="Node3D"]
+editor_description = "Two-storey half-timbered house, 6 × 4.4 m, upper floor overhangs the front by 0.5 m (above head height, so the cells under it stay walkable). Tiled roof, top 6.9 m. Front faces +Z. Casts gameplay shade. Origin: ground centre."
+
+[node name="Plinth" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.225, 0)
+mesh = SubResource("BoxMesh_1")
+surface_material_override/0 = ExtResource("1_stone_base")
+
+[node name="GroundFloor" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.475, 0)
+mesh = SubResource("BoxMesh_2")
+surface_material_override/0 = ExtResource("2_whitewash")
+
+[node name="UpperFloor" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0.25)
+mesh = SubResource("BoxMesh_3")
+surface_material_override/0 = ExtResource("2_whitewash")
+
+[node name="JettyBeam" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 0.25)
+mesh = SubResource("BoxMesh_4")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.04, 3.6, 2.73)
+mesh = SubResource("BoxMesh_5")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost1" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.824, 3.6, 2.73)
+mesh = SubResource("BoxMesh_6")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost2" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.608, 3.6, 2.73)
+mesh = SubResource("BoxMesh_7")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost3" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.608, 3.6, 2.73)
+mesh = SubResource("BoxMesh_8")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost4" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.824, 3.6, 2.73)
+mesh = SubResource("BoxMesh_9")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontPost5" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.04, 3.6, 2.73)
+mesh = SubResource("BoxMesh_10")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontSill" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.76, 2.73)
+mesh = SubResource("BoxMesh_11")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontHead" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.44, 2.73)
+mesh = SubResource("BoxMesh_12")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontMid" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 2.73)
+mesh = SubResource("BoxMesh_13")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontBrace0" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.80379, -0.59491, 0, 0.59491, 0.80379, 0, 0, 0, 1, -2.432, 4.05, 2.73)
+mesh = SubResource("BoxMesh_14")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="UpFrontBrace4" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.80379, 0.59491, 0, -0.59491, 0.80379, 0, 0, 0, 1, 2.432, 4.05, 2.73)
+mesh = SubResource("BoxMesh_15")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontPost0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.94, 1.475, 2.23)
+mesh = SubResource("BoxMesh_16")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontPost1" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.98, 1.475, 2.23)
+mesh = SubResource("BoxMesh_17")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontPost2" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.98, 1.475, 2.23)
+mesh = SubResource("BoxMesh_18")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontPost3" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.94, 1.475, 2.23)
+mesh = SubResource("BoxMesh_19")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontSill" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.51, 2.23)
+mesh = SubResource("BoxMesh_20")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontHead" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.44, 2.23)
+mesh = SubResource("BoxMesh_21")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="GroundFrontMid" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.475, 2.23)
+mesh = SubResource("BoxMesh_22")
+surface_material_override/0 = ExtResource("3_timber_dark")
+cast_shadow = 0
+
+[node name="Roof" parent="." type="MeshInstance3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 5.7, 0.25)
+mesh = SubResource("PrismMesh_23")
+surface_material_override/0 = ExtResource("4_roof_tile")
+
+[node name="GableL" parent="." type="MeshInstance3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.95, 5.575, 0.25)
+mesh = SubResource("PrismMesh_24")
+surface_material_override/0 = ExtResource("2_whitewash")
+cast_shadow = 0
+
+[node name="GableR" parent="." type="MeshInstance3D"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2.95, 5.575, 0.25)
+mesh = SubResource("PrismMesh_25")
+surface_material_override/0 = ExtResource("2_whitewash")
+cast_shadow = 0
+
+[node name="Chimney" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1, 6.15, -0.15)
+mesh = SubResource("BoxMesh_26")
+surface_material_override/0 = ExtResource("1_stone_base")
+
+[node name="Door" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 1.375, 2.24)
+mesh = SubResource("BoxMesh_27")
+surface_material_override/0 = ExtResource("5_door_wood")
+cast_shadow = 0
+
+[node name="DoorStep" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 0.075, 2.39)
+mesh = SubResource("BoxMesh_28")
+surface_material_override/0 = ExtResource("1_stone_base")
+cast_shadow = 0
+
+[node name="Window0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 1.5, 2.24)
+mesh = SubResource("BoxMesh_29")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="Window1" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 1.5, 2.24)
+mesh = SubResource("BoxMesh_30")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="UpWindow0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 3.55, 2.75)
+mesh = SubResource("BoxMesh_31")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="UpWindow1" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.55, 2.75)
+mesh = SubResource("BoxMesh_32")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="UpWindow2" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 3.55, 2.75)
+mesh = SubResource("BoxMesh_33")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="SideWindow" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.04, 1.5, 0)
+mesh = SubResource("BoxMesh_34")
+surface_material_override/0 = ExtResource("6_window_warm")
+cast_shadow = 0
+
+[node name="ShadowCaster" parent="." type="StaticBody3D"]
+collision_layer = 8
+collision_mask = 0
+
+[node name="GroundShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+shape = SubResource("BoxShape3D_35")
+
+[node name="UpperShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0.25)
+shape = SubResource("BoxShape3D_36")
+
+[node name="RoofShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 0.25)
+shape = SubResource("ConvexPolygonShape3D_37")
+
+[node name="ChimneyShape" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1, 6.15, -0.15)
+shape = SubResource("BoxShape3D_38")

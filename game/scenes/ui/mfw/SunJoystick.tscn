@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://game/scenes/ui/mfw/SunJoystick.gd" id="1_joy"]
 [ext_resource type="Script" path="res://game/scenes/ui/mfw/DialRing.gd" id="2_ring"]
+[ext_resource type="PackedScene" path="res://game/scenes/ui/mfw/SunLock.tscn" id="9_lock"]
 
 [sub_resource type="StyleBoxFlat" id="Style_blocked"]
 draw_center = false
@@ -176,3 +177,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("Style_core")
+
+[node name="SunLock" parent="." instance=ExtResource("9_lock")]
+fit_radius = 128.0
+link_length = 26.0
+link_width = 14.0
+link_thickness = 4.0

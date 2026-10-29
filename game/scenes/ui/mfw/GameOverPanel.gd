@@ -23,6 +23,6 @@ func _on_ready() -> void:
 	_retry.grab_focus.call_deferred()
 
 func show_results(level_title: String, level_number: int, cause: String) -> void:
-	_title.text = "BURNED TO ASH" if cause == "sunlight" else "DEFEATED"
+	_title.text = "BURNED TO ASH" if cause == "sunlight" else ("CAUGHT!" if cause == "caught" else "DEFEATED")
 	_level.text = "Level %d · %s" % [level_number, level_title]
-	_detail.text = "Stay in the shadows."
+	_detail.text = "Hide until the villagers pass." if cause == "caught" else "Stay in the shadows."

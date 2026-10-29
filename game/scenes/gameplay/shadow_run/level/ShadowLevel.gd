@@ -29,6 +29,24 @@ extends Node3D
 ## may need (1 = the sun must be used at all; raise it for harder levels).
 @export_range(1, 6) var min_sun_adjustments: int = 1
 
+@export_group("Auto sun")
+## The sun runs by itself on a loop (the player can't steer it): it holds at each angle of
+## auto_sun_keys for auto_sun_hold_time, then sweeps to the next one in auto_sun_move_time,
+## and after the last key back to the first. The sun controls are shown chained.
+## sun_start_azimuth / elevation should equal the first key.
+@export var auto_sun: bool = false
+## (azimuth, elevation) in degrees, inside the level's ranges.
+@export var auto_sun_keys: PackedVector2Array = PackedVector2Array()
+@export var auto_sun_hold_time: float = 8.0
+@export var auto_sun_move_time: float = 3.0
+## Extra hold time on the first key when the level starts (time to read the tutorial).
+@export var auto_sun_first_hold_bonus: float = 4.0
+
+@export_group("Tutorial")
+## Shown one after another in the hint banner at level start (replaces `hint`).
+@export_multiline var tutorial_steps: PackedStringArray = PackedStringArray()
+@export var tutorial_step_time: float = 4.0
+
 @export_group("Camera overrides")
 ## Pitch override in degrees (40.0–50.0). 0.0 uses camera default (45°).
 @export_range(0.0, 60.0) var camera_pitch: float = 0.0
@@ -43,6 +61,26 @@ extends Node3D
 @export var start: Marker3D
 @export var goal: LevelGoal
 @export var grid: ShadeGrid
+
+## Auto sun: the angle (az, el) at schedule time t (s, from level start), whether the sun is
+## sweeping, the key it is holding at / sweeping from, and the seconds until the next change.
+func auto_sun_state(t: float) -> Dictionary:
+	var n := auto_sun_keys.size()
+	if n == 0:
+		return {"angle": Vector2(sun_start_azimuth, sun_start_elevation), "moving": false, "key": 0, "time_left": INF}
+	var first := auto_sun_hold_time + auto_sun_first_hold_bonus
+	if t < first or n == 1:
+		return {"angle": auto_sun_keys[0], "moving": false, "key": 0, "time_left": first - t if n > 1 else INF}
+	var step := auto_sun_hold_time + auto_sun_move_time
+	var u := fposmod(t - first, step * n)
+	var k := int(u / step)          # sweeping from key k to key k+1, then holding at k+1
+	var local := u - k * step
+	var a := auto_sun_keys[k]
+	var b := auto_sun_keys[(k + 1) % n]
+	if local < auto_sun_move_time:
+		var f := smoothstep(0.0, 1.0, local / maxf(auto_sun_move_time, 0.001))
+		return {"angle": a.lerp(b, f), "moving": true, "key": k, "time_left": auto_sun_move_time - local}
+	return {"angle": b, "moving": false, "key": (k + 1) % n, "time_left": step - local}
 
 ## World X of the grid's centre line (the camera centres here so the whole width shows).
 func center_x() -> float:

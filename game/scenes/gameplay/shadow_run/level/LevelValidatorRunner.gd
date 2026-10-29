@@ -9,7 +9,9 @@ extends Node3D
 ## adjustments (ShadowLevel export), is not trivial (one sun sweep from the start spot
 ## must not connect straight to the goal), and every needed sun angle has a comfortable
 ## window (≥ min_window_degrees on azimuth or elevation). The report lists one solution
-## step by step. Debug tool only: never part of gameplay.
+## step by step. Levels with villagers also run `patrol_check` (PatrolCheck) on that
+## solution: every watched chokepoint on the route needs a patrol gap and a reachable
+## hiding spot. Debug tool only: never part of gameplay.
 ## Exit code 0 = all levels pass. Each level is loaded WITHOUT its gameplay shell
 ## ("Game" child is removed before it enters the tree), so nothing boots.
 
@@ -18,6 +20,8 @@ const LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/LevelC
 @export var catalog: LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/level_catalog.tres")
 @export_file("*.tscn") var level_scenes: PackedStringArray = PackedStringArray()
 @export var solver: LevelSolver
+## Villager patrol check, run on every level that has villagers (level/patrol_check.tres).
+@export var patrol_check: PatrolCheck
 @export var logger: Node
 @export var quit_when_done: bool = true
 @export var verbose_level: int = 0
@@ -101,12 +105,18 @@ func _run() -> void:
 		await get_tree().physics_frame
 		level.grid.build_static()
 		var t0 := Time.get_ticks_msec()
-		var r := solver.solve(level)
+		var r := solver.solve_schedule(level) if level.auto_sun else solver.solve(level)
 		var narrowest := INF
 		for w in r.windows:
 			narrowest = minf(narrowest, maxf(w.azimuth_span, w.elevation_span))
 		var comfortable: bool = narrowest >= min_window_degrees
-		var ok: bool = r.solvable and r.needs_sun and String(r.trivial) == "" 			and r.adjustments >= level.min_sun_adjustments and comfortable
+		var ok: bool = r.solvable and r.needs_sun and String(r.trivial) == "" 			and r.adjustments >= level.min_sun_adjustments and (comfortable or level.auto_sun)
+		var patrol_lines: Array[String] = []
+		if patrol_check and r.solvable:
+			var pc := patrol_check.check(level, r, solver)
+			if not (pc.lines as Array).has("no villagers"):
+				patrol_lines.assign(pc.lines)
+				ok = ok and pc.ok
 		if not ok:
 			failed += 1
 		logger.info("%s Level %d '%s': solvable=%s min_sun_adjustments=%d (need >= %d) trivial=%s narrowest_window=%.1f° (%d angles, %d ms) %s" % [
@@ -116,6 +126,8 @@ func _run() -> void:
 		logger.info("  start: az %.1f° el %.1f°, Dracula on cell %s" % [level.sun_start_azimuth, level.sun_start_elevation, str(r.get("start_cell", ""))])
 		for i in (r.steps as Array).size():
 			logger.info("  %d. %s" % [i + 1, r.steps[i]])
+		for line in patrol_lines:
+			logger.info("  patrol: %s" % line)
 		if level.level_number == verbose_level:
 			_dump(level)
 		level.queue_free()

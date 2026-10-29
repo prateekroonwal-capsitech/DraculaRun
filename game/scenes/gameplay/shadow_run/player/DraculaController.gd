@@ -12,7 +12,7 @@ extends PlayerController3D
 
 ## Reached the last point of the current path.
 signal arrived
-## Emitted after the death animation completes. cause is "sunlight".
+## Emitted after the death animation completes. cause is "sunlight" or "caught".
 signal death_finished(cause: String)
 
 enum State { IDLE, ACTIVE, DYING, DEAD }
@@ -73,6 +73,20 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 @export var disintegrate_time: float = 0.75
 @export var ash_linger_time: float = 0.4
 
+@export_group("Hiding")
+## Seconds to slip into / out of a hiding spot.
+@export var hide_time: float = 0.25
+## How far his visual moves toward the spot's centre while tucking away (0..1).
+@export var hide_tuck: float = 0.6
+## Visual scale at the end of the tuck (then the model is hidden).
+@export var hide_scale: float = 0.2
+
+@export_group("Caught animation")
+@export var caught_recoil_degrees: float = 28.0
+@export var caught_recoil_time: float = 0.15
+@export var caught_vanish_time: float = 0.55
+@export var caught_linger_time: float = 0.5
+
 @export_group("Feel")
 @export var no_cue_degrees: float = 22.0
 @export var flinch_degrees: float = 14.0
@@ -102,6 +116,8 @@ var _cue_tween: Tween
 var _drag_active: bool = false
 var _drag_clamped_at_edge: bool = false
 var _ground_velocity: Vector3 = Vector3.ZERO
+var _hidden: bool = false
+var _hide_tween: Tween
 
 func inject_services(registry: Node) -> void:
 	if not registry:
@@ -154,6 +170,10 @@ func place_at(world: Vector3, facing_radians: float = 0.0) -> void:
 	_turning_in_place = false
 	_drag_active = false
 	_drag_clamped_at_edge = false
+	_hidden = false
+	visual.visible = true
+	visual.position = Vector3.ZERO
+	visual.scale = Vector3.ONE
 	body_visual.reset_to_idle()
 	reset_physics_interpolation()
 
@@ -262,6 +282,59 @@ func play_burn_death() -> void:
 	tw.parallel().tween_property(flare_light, "light_energy", 0.0, disintegrate_time + 0.15)
 	tw.tween_interval(ash_linger_time)
 	tw.tween_callback(_finish_death.bind("sunlight"))
+
+## Slip into a hiding spot: he stops, tucks toward `spot_center` while shrinking, then
+## the model is hidden (HideSpot shows its own "hidden" icon).
+func hide_in(spot_center: Vector3) -> void:
+	_hidden = true
+	_points.clear()
+	_index = 0
+	_cur_speed = 0.0
+	body_visual.set_motion(0.0)
+	var tuck := spot_center - global_position
+	tuck.y = 0.0
+	if _hide_tween and _hide_tween.is_valid():
+		_hide_tween.kill()
+	_hide_tween = create_tween().set_parallel()
+	_hide_tween.tween_property(visual, "position", tuck * hide_tuck, hide_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	_hide_tween.tween_property(visual, "scale", Vector3.ONE * hide_scale, hide_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	_hide_tween.chain().tween_callback(func() -> void: visual.visible = false)
+
+## Step back out of the hiding spot (reverse of hide_in).
+func leave_hiding() -> void:
+	if not _hidden:
+		return
+	_hidden = false
+	visual.visible = true
+	if _hide_tween and _hide_tween.is_valid():
+		_hide_tween.kill()
+	_hide_tween = create_tween().set_parallel()
+	_hide_tween.tween_property(visual, "position", Vector3.ZERO, hide_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_hide_tween.tween_property(visual, "scale", Vector3.ONE, hide_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+func is_hidden() -> bool:
+	return _hidden
+
+## A villager's attack landed: recoil, burst into bats, then death_finished("caught").
+func play_caught_death() -> void:
+	if is_dead_or_dying():
+		return
+	_state = State.DYING
+	_points.clear()
+	_index = 0
+	body_visual.set_motion(0.0)
+	if _haptics:
+		_haptics.heavy()
+	if _audio and death_sting_sfx:
+		_audio.play_sfx(death_sting_sfx)
+	if _cue_tween and _cue_tween.is_valid():
+		_cue_tween.kill()
+	var tw := create_tween()
+	tw.tween_property(body_visual, "rotation:x", deg_to_rad(-caught_recoil_degrees), caught_recoil_time).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(bats.restart)
+	tw.tween_property(visual, "scale", Vector3(0.05, 0.05, 0.05), caught_vanish_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_interval(caught_linger_time)
+	tw.tween_callback(_finish_death.bind("caught"))
 
 # ── Movement ──────────────────────────────────────────────────────────────
 

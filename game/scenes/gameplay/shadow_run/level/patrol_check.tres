@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="PatrolCheck" format=3]
+
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/PatrolCheck.gd" id="1_check"]
+
+[resource]
+script = ExtResource("1_check")
+time_step = 0.1
+dracula_speed = 8.0
+margin_time = 0.5
+max_hide_distance = 8.0

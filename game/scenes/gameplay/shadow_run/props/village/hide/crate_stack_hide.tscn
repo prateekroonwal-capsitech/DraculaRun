@@ -1,0 +1,153 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://game/assets/materials/wood_crate.tres" id="1_wood_crate"]
+[ext_resource type="Material" path="res://game/assets/materials/iron.tres" id="2_iron"]
+[ext_resource type="Material" path="res://game/assets/materials/village/crate_light.tres" id="3_crate_light"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/props/village/HideSpot.gd" id="4_HideSpot"]
+[ext_resource type="Material" path="res://game/assets/materials/village/hide_marker.tres" id="5_hide_marker"]
+[ext_resource type="Material" path="res://game/assets/materials/villager/hidden_icon.tres" id="6_hidden_icon"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2"]
+size = Vector3(1.03, 0.08, 1.03)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+size = Vector3(1.03, 0.08, 1.03)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6"]
+size = Vector3(1.03, 0.08, 1.03)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7"]
+size = Vector3(0.6, 0.6, 0.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8"]
+size = Vector3(0.63, 0.08, 0.63)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_9"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_10"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_11"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_12"]
+size = Vector3(0.6, 0.6, 0.6)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_13"]
+size = Vector3(2.8, 2.2, 2.8)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_14"]
+size = Vector2(0.9, 0.9)
+
+[sub_resource type="QuadMesh" id="QuadMesh_15"]
+size = Vector2(0.55, 0.55)
+
+[node name="crate_stack_hide" type="Node3D" node_paths=PackedStringArray("hide_zone", "entry", "entry_marker", "hidden_icon")]
+editor_description = "Hiding spot: stacked crates, 2.2 m wide, 2 m tall. Casts gameplay shade. Dracula hides from Entry (+Z)."
+script = ExtResource("4_HideSpot")
+max_hide_time = 0
+hide_zone = NodePath("HideZone")
+entry = NodePath("Entry")
+entry_marker = NodePath("EntryMarker")
+hidden_icon = NodePath("HiddenIcon")
+
+[node name="Crate0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 0.5, 0)
+mesh = SubResource("BoxMesh_1")
+surface_material_override/0 = ExtResource("1_wood_crate")
+
+[node name="Band0" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 0.8, 0)
+mesh = SubResource("BoxMesh_2")
+surface_material_override/0 = ExtResource("2_iron")
+cast_shadow = 0
+
+[node name="Crate1" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.99027, 0, 0.13917, 0, 1, 0, -0.13917, 0, 0.99027, 0.55, 0.5, 0.05)
+mesh = SubResource("BoxMesh_3")
+surface_material_override/0 = ExtResource("3_crate_light")
+
+[node name="Band1" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.99027, 0, 0.13917, 0, 1, 0, -0.13917, 0, 0.99027, 0.55, 0.8, 0.05)
+mesh = SubResource("BoxMesh_4")
+surface_material_override/0 = ExtResource("2_iron")
+cast_shadow = 0
+
+[node name="Crate2" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.98481, 0, -0.17365, 0, 1, 0, 0.17365, 0, 0.98481, 0, 1.5, 0)
+mesh = SubResource("BoxMesh_5")
+surface_material_override/0 = ExtResource("3_crate_light")
+
+[node name="Band2" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.98481, 0, -0.17365, 0, 1, 0, 0.17365, 0, 0.98481, 0, 1.8, 0)
+mesh = SubResource("BoxMesh_6")
+surface_material_override/0 = ExtResource("2_iron")
+cast_shadow = 0
+
+[node name="Crate3" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.93969, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.93969, 1.15, 0.3, 0.75)
+mesh = SubResource("BoxMesh_7")
+surface_material_override/0 = ExtResource("1_wood_crate")
+
+[node name="Band3" parent="." type="MeshInstance3D"]
+transform = Transform3D(0.93969, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.93969, 1.15, 0.48, 0.75)
+mesh = SubResource("BoxMesh_8")
+surface_material_override/0 = ExtResource("2_iron")
+cast_shadow = 0
+
+[node name="ShadowCaster" parent="." type="StaticBody3D"]
+collision_layer = 8
+collision_mask = 0
+
+[node name="Crate0" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 0.5, 0)
+shape = SubResource("BoxShape3D_9")
+
+[node name="Crate1" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(0.99027, 0, 0.13917, 0, 1, 0, -0.13917, 0, 0.99027, 0.55, 0.5, 0.05)
+shape = SubResource("BoxShape3D_10")
+
+[node name="Crate2" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(0.98481, 0, -0.17365, 0, 1, 0, 0.17365, 0, 0.98481, 0, 1.5, 0)
+shape = SubResource("BoxShape3D_11")
+
+[node name="Crate3" parent="ShadowCaster" type="CollisionShape3D"]
+transform = Transform3D(0.93969, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.93969, 1.15, 0.3, 0.75)
+shape = SubResource("BoxShape3D_12")
+
+[node name="HideZone" parent="." type="Area3D"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+editor_description = "Tap target (layer 5 hide_spot). Covers the prop and its Entry."
+
+[node name="Shape" parent="HideZone" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.1, 0.5)
+shape = SubResource("BoxShape3D_13")
+
+[node name="Entry" parent="." type="Marker3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.45)
+editor_description = "Where Dracula stands to hide. Must be on a non-solid grid cell reachable in shade."
+
+[node name="EntryMarker" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 1.45)
+mesh = SubResource("PlaneMesh_14")
+surface_material_override/0 = ExtResource("5_hide_marker")
+cast_shadow = 0
+
+[node name="HiddenIcon" parent="." type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
+mesh = SubResource("QuadMesh_15")
+surface_material_override/0 = ExtResource("6_hidden_icon")
+cast_shadow = 0
+visible = false

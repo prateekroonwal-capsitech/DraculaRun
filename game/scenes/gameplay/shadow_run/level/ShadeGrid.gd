@@ -466,6 +466,77 @@ func _find_walk_path(from: Vector2i, to: Vector2i) -> Dictionary:
 		i = parent[i]
 	return {"cells": cells, "hops": hops}
 
+## Ground A* for villagers: same moves as walking, but only walls block (sunlight is
+## ignored). Off-grid or solid ends snap to the nearest open cell. Returns the cells after
+## `from`, or an empty array when there is no route.
+func find_ground_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	from = _nearest_open(from)
+	to = _nearest_open(to)
+	if not in_bounds(from) or not in_bounds(to) or from == to:
+		return cells
+	var n := cell_count()
+	var g := PackedFloat32Array()
+	g.resize(n)
+	g.fill(1.0e9)
+	var parent := PackedInt32Array()
+	parent.resize(n)
+	parent.fill(-1)
+	var closed := PackedByteArray()
+	closed.resize(n)
+	var heap_f := PackedFloat32Array()
+	var heap_i := PackedInt32Array()
+	var start := index_of(from)
+	var goal := index_of(to)
+	g[start] = 0.0
+	_heap_push(heap_f, heap_i, _octile(from.x - to.x, from.y - to.y), start)
+	while heap_i.size() > 0:
+		var cur := _heap_pop(heap_f, heap_i)
+		if closed[cur] != 0:
+			continue
+		if cur == goal:
+			break
+		closed[cur] = 1
+		var cx := cur % cols
+		@warning_ignore("integer_division")
+		var cy := cur / cols
+		for k in 8:
+			var nx := cx + _DX[k]
+			var ny := cy + _DY[k]
+			if nx < 0 or ny < 0 or nx >= cols or ny >= rows:
+				continue
+			var ni := ny * cols + nx
+			if closed[ni] != 0 or _solid[ni] != 0:
+				continue
+			if k >= 4 and (_solid[cy * cols + nx] != 0 or _solid[ny * cols + cx] != 0):
+				continue   # no corner cutting past walls
+			var ng := g[cur] + (1.4142136 if k >= 4 else 1.0)
+			if ng < g[ni]:
+				g[ni] = ng
+				parent[ni] = cur
+				_heap_push(heap_f, heap_i, ng + _octile(nx - to.x, ny - to.y), ni)
+	if parent[goal] < 0:
+		return cells
+	var i := goal
+	while i != start:
+		@warning_ignore("integer_division")
+		cells.push_front(Vector2i(i % cols, i / cols))
+		i = parent[i]
+	return cells
+
+## Nearest in-bounds, non-solid cell to c (clamped onto the grid first), within 3 cells.
+func _nearest_open(c: Vector2i) -> Vector2i:
+	c = Vector2i(clampi(c.x, 0, cols - 1), clampi(c.y, 0, rows - 1))
+	if not is_solid(c):
+		return c
+	for r in range(1, 4):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var nb := c + Vector2i(dx, dy)
+				if in_bounds(nb) and not is_solid(nb):
+					return nb
+	return Vector2i(-1, -1)
+
 static func _octile(dx: int, dy: int) -> float:
 	var ax := absi(dx)
 	var ay := absi(dy)
