@@ -86,8 +86,8 @@ enum Mode {
 @export var intro_hold_time: float = 0.6
 ## Time to smoothly pan from Goal to Dracula (seconds).
 @export var intro_pan_time: float = 1.5
-## Option to automatically skip intro after first play.
-@export var skip_intro_after_first_play: bool = true
+## Time to blend from current intro pose to start pose when player taps to skip (seconds).
+@export var intro_skip_blend_time: float = 0.3
 
 @export_group("Death cam")
 @export var death_height: float = 6.0
@@ -145,6 +145,9 @@ var _planning_tween: Tween = null
 var _intro_tween: Tween = null
 var _is_planning_active: bool = false
 var _intro_ended: bool = false
+var _is_skipping_intro: bool = false
+var _start_pose: Dictionary = {}
+var _goal_pose: Dictionary = {}
 var _save_mgr: SaveManager = null
 var _level_id: String = ""
 
@@ -176,6 +179,14 @@ func _ready() -> void:
 	_ray_query.collision_mask = 12
 	set_process(true)
 	set_physics_process(false)
+
+func _exit_tree() -> void:
+	if _intro_tween and _intro_tween.is_valid():
+		_intro_tween.kill()
+		_intro_tween = null
+	if _planning_tween and _planning_tween.is_valid():
+		_planning_tween.kill()
+		_planning_tween = null
 
 # ── Screen & Projection Math ───────────────────────────────────────────────
 
@@ -278,23 +289,93 @@ func apply_level_overrides(pitch: float, dist: float, h: float) -> void:
 	_cur_height = height
 	_cur_pitch = pitch_degrees
 
+# ── Gameplay Pose Calculation ──────────────────────────────────────────────
+
+## Computes the exact camera pose that frames target_pos in gameplay mode
+## (taking into account screen-space anchor, safe box, soft zone, lateral follow, and level bounds).
+func get_gameplay_start_pose(target_pos: Vector3) -> Dictionary:
+	var play_rect := get_play_view_rect()
+	var S_min_x := play_rect.position.x + play_rect.size.x * safe_box_margin_h
+	var S_max_x := play_rect.end.x - play_rect.size.x * safe_box_margin_h
+	var S_min_y := play_rect.position.y + play_rect.size.y * safe_box_margin_v
+	var S_max_y := play_rect.end.y - play_rect.size.y * safe_box_margin_v
+
+	var soft_w := play_rect.size.x * soft_zone_margin
+	var soft_h := play_rect.size.y * soft_zone_margin
+	var Z_min_x := S_min_x + soft_w
+	var Z_max_x := S_max_x - soft_w
+	var Z_min_y := S_min_y + soft_h
+	var Z_max_y := S_max_y - soft_h
+
+	var target_anchor_x := clampf(play_rect.position.x + play_rect.size.x * base_anchor_x, Z_min_x, Z_max_x)
+	var target_anchor_y := clampf(play_rect.position.y + play_rect.size.y * base_anchor_y, Z_min_y, Z_max_y)
+
+	var pitch_r := deg_to_rad(_cur_pitch)
+	var cam_pos := camera_pos_for_screen_target(target_pos, target_anchor_x, target_anchor_y, _cur_height, pitch_r)
+
+	if lateral_follow < 0.99:
+		var center_cam := camera_pos_for_screen_target(Vector3(center_x, 0.0, target_pos.z), target_anchor_x, target_anchor_y, _cur_height, pitch_r)
+		cam_pos.x = lerpf(center_cam.x, cam_pos.x, lateral_follow)
+
+	if enable_level_bounds and level_bounds.size.x > 0.0 and level_bounds.size.y > 0.0:
+		cam_pos.x = clampf(cam_pos.x, level_bounds.position.x, level_bounds.end.x)
+		cam_pos.z = clampf(cam_pos.z, level_bounds.position.y + _cur_distance, level_bounds.end.y + _cur_distance)
+
+	# Safe box ALWAYS wins!
+	var proj_screen := project_to_screen(cam_pos, target_pos, pitch_r)
+	var clamped_sx := clampf(proj_screen.x, S_min_x, S_max_x)
+	var clamped_sy := clampf(proj_screen.y, S_min_y, S_max_y)
+	if absf(clamped_sx - proj_screen.x) > 0.01 or absf(clamped_sy - proj_screen.y) > 0.01:
+		var req_cam := camera_pos_for_screen_target(target_pos, clamped_sx, clamped_sy, _cur_height, pitch_r)
+		cam_pos.x = req_cam.x
+		cam_pos.z = req_cam.z
+
+	cam_pos.y = _cur_height
+	var focus := Vector3(cam_pos.x, 0.0, cam_pos.z - _cur_distance)
+	var rot := Vector3(-pitch_r, 0.0, 0.0)
+
+	return {
+		"position": cam_pos,
+		"rotation": rot,
+		"distance": _cur_distance,
+		"pitch": _cur_pitch,
+		"height": _cur_height,
+		"focus_pos": focus,
+		"anchor": Vector2(target_anchor_x, target_anchor_y)
+	}
+
+func _apply_intro_step(pos: Vector3, pitch: float, dist: float, h: float) -> void:
+	_cam_world_pos = pos
+	_cur_pitch = pitch
+	_cur_distance = dist
+	_cur_height = h
+	_focus_pos.x = pos.x
+	_focus_pos.y = 0.0
+	_focus_pos.z = pos.z - dist
+	_apply()
+
 # ── Follow API ────────────────────────────────────────────────────
 
 func follow(target: Node3D) -> void:
 	_target = target
-	var tp := _get_target_pos()
+	var tp: Vector3 = _get_target_pos()
 	_prev_target_pos = tp
-	var play_rect := get_play_view_rect()
-	var init_anchor_x := play_rect.position.x + play_rect.size.x * base_anchor_x
-	var init_anchor_y := play_rect.position.y + play_rect.size.y * base_anchor_y
-	var init_cam := camera_pos_for_screen_target(tp, init_anchor_x, init_anchor_y, _cur_height, deg_to_rad(_cur_pitch))
-	_cam_world_pos = init_cam
-	_focus_pos = Vector3(init_cam.x, 0.0, init_cam.z - _cur_distance)
-	_apply()
+	var pose: Dictionary = get_gameplay_start_pose(tp)
+	_start_pose = pose
+	var s_pos: Vector3 = pose.get("position", _cam_world_pos)
+	var s_pitch: float = pose.get("pitch", _cur_pitch)
+	var s_dist: float = pose.get("distance", _cur_distance)
+	var s_h: float = pose.get("height", _cur_height)
+	_apply_intro_step(s_pos, s_pitch, s_dist, s_h)
+	_cur_la_offset_x = 0.0
+	_cur_la_offset_y = 0.0
 	set_process(true)
 
 func stop_follow() -> void:
 	_target = null
+	if _intro_tween and _intro_tween.is_valid():
+		_intro_tween.kill()
+		_intro_tween = null
 	_check_idle()
 
 func _get_target_pos() -> Vector3:
@@ -309,23 +390,8 @@ func play_intro(goal_pos: Vector3, start_pos: Vector3, save_mgr: SaveManager = n
 	_save_mgr = save_mgr
 	_level_id = level_id
 	_intro_ended = false
+	_is_skipping_intro = false
 	_log("play_intro: goal=%s start=%s level_id=%s" % [str(goal_pos), str(start_pos), level_id])
-
-	if skip_intro_after_first_play and save_mgr != null and level_id != "":
-		var seen_key := "intro_seen_level_" + level_id
-		if save_mgr.get_custom_data(seen_key, false) == true:
-			_log("intro already seen, skipping to Dracula")
-			_mode = Mode.FOLLOW
-			var play_rect := get_play_view_rect()
-			var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
-			var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
-			var c := camera_pos_for_screen_target(start_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
-			_cam_world_pos = c
-			_focus_pos = Vector3(c.x, 0.0, c.z - _cur_distance)
-			_apply()
-			_intro_ended = true
-			intro_finished.emit()
-			return
 
 	_mode = Mode.INTRO
 	set_process(true)
@@ -333,67 +399,127 @@ func play_intro(goal_pos: Vector3, start_pos: Vector3, save_mgr: SaveManager = n
 	if _intro_tween and _intro_tween.is_valid():
 		_intro_tween.kill()
 
-	# Start framing the Goal
-	var play_rect := get_play_view_rect()
-	var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
-	var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
-	var goal_cam := camera_pos_for_screen_target(goal_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
-	var start_cam := camera_pos_for_screen_target(start_pos, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
+	var actual_start_pos := start_pos
+	if _target != null and is_instance_valid(_target):
+		actual_start_pos = _get_target_pos()
 
-	_cam_world_pos = goal_cam
-	_focus_pos = Vector3(goal_cam.x, 0.0, goal_cam.z - _cur_distance)
-	_apply()
+	_start_pose = get_gameplay_start_pose(actual_start_pos)
+	_goal_pose = get_gameplay_start_pose(goal_pos)
 
-	# Safety watchdog timer
-	var timeout: float = intro_hold_time + intro_pan_time + 1.0
+	# Frame the Goal at the start of the intro
+	var g_pos: Vector3 = _goal_pose.get("position", Vector3.ZERO)
+	var g_pitch: float = _goal_pose.get("pitch", _cur_pitch)
+	var g_dist: float = _goal_pose.get("distance", _cur_distance)
+	var g_h: float = _goal_pose.get("height", _cur_height)
+	_apply_intro_step(g_pos, g_pitch, g_dist, g_h)
+
+	# Safety watchdog timer: guarantees intro will finish even if tweens fail or stall
+	var timeout: float = intro_hold_time + intro_pan_time + intro_skip_blend_time + 1.5
 	get_tree().create_timer(timeout, false, false, true).timeout.connect(func() -> void:
 		if _mode == Mode.INTRO and not _intro_ended:
 			_log("intro safety watchdog timeout fired!")
 			_end_intro()
 	)
 
+	var s_pos: Vector3 = _start_pose.get("position", Vector3.ZERO)
+	var s_pitch: float = _start_pose.get("pitch", _cur_pitch)
+	var s_dist: float = _start_pose.get("distance", _cur_distance)
+	var s_h: float = _start_pose.get("height", _cur_height)
+
 	_intro_tween = create_tween()
 	_intro_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	_intro_tween.tween_interval(intro_hold_time)
+	if intro_hold_time > 0.0:
+		_intro_tween.tween_interval(intro_hold_time)
+
+	var pan_dur: float = maxf(intro_pan_time, 0.05)
 	_intro_tween.tween_method(
-		func(val: float) -> void:
-			_cam_world_pos.z = val
-			_focus_pos.z = val - _cur_distance
-			_apply(),
-		goal_cam.z,
-		start_cam.z,
-		intro_pan_time
+		func(t: float) -> void:
+			var p: Vector3 = g_pos.lerp(s_pos, t)
+			var pitch: float = lerpf(g_pitch, s_pitch, t)
+			var dist: float = lerpf(g_dist, s_dist, t)
+			var h: float = lerpf(g_h, s_h, t)
+			_apply_intro_step(p, pitch, dist, h),
+		0.0,
+		1.0,
+		pan_dur
 	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 	_intro_tween.finished.connect(_end_intro)
 
 func skip_intro() -> void:
-	if _mode != Mode.INTRO or _intro_ended:
+	if _mode != Mode.INTRO or _intro_ended or _is_skipping_intro:
 		return
-	_log("skip_intro called by player tap")
-	_end_intro()
+	_log("skip_intro called by player tap (blend_time=%.2f)" % intro_skip_blend_time)
+	_is_skipping_intro = true
+
+	if _intro_tween and _intro_tween.is_valid():
+		_intro_tween.kill()
+
+	if intro_skip_blend_time <= 0.01:
+		_end_intro()
+		return
+
+	var from_pos: Vector3 = _cam_world_pos
+	var from_pitch: float = _cur_pitch
+	var from_dist: float = _cur_distance
+	var from_h: float = _cur_height
+	var s_pos: Vector3 = _start_pose.get("position", _cam_world_pos)
+	var s_pitch: float = _start_pose.get("pitch", _cur_pitch)
+	var s_dist: float = _start_pose.get("distance", _cur_distance)
+	var s_h: float = _start_pose.get("height", _cur_height)
+
+	_intro_tween = create_tween()
+	_intro_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_intro_tween.tween_method(
+		func(t: float) -> void:
+			var p: Vector3 = from_pos.lerp(s_pos, t)
+			var pitch: float = lerpf(from_pitch, s_pitch, t)
+			var dist: float = lerpf(from_dist, s_dist, t)
+			var h: float = lerpf(from_h, s_h, t)
+			_apply_intro_step(p, pitch, dist, h),
+		0.0,
+		1.0,
+		intro_skip_blend_time
+	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	_intro_tween.finished.connect(_end_intro)
 
 func _end_intro() -> void:
 	if _intro_ended or _mode != Mode.INTRO:
 		return
 	_intro_ended = true
-	_mode = Mode.FOLLOW
+	_is_skipping_intro = false
 	if _intro_tween and _intro_tween.is_valid():
 		_intro_tween.kill()
 		_intro_tween = null
+
+	# Initialize follow camera internal state to exact start pose
+	if not _start_pose.is_empty():
+		var s_pos: Vector3 = _start_pose.get("position", _cam_world_pos)
+		var s_pitch: float = _start_pose.get("pitch", _cur_pitch)
+		var s_dist: float = _start_pose.get("distance", _cur_distance)
+		var s_h: float = _start_pose.get("height", _cur_height)
+		_apply_intro_step(s_pos, s_pitch, s_dist, s_h)
+	elif _target:
+		_start_pose = get_gameplay_start_pose(_get_target_pos())
+		var s_pos: Vector3 = _start_pose.get("position", _cam_world_pos)
+		var s_pitch: float = _start_pose.get("pitch", _cur_pitch)
+		var s_dist: float = _start_pose.get("distance", _cur_distance)
+		var s_h: float = _start_pose.get("height", _cur_height)
+		_apply_intro_step(s_pos, s_pitch, s_dist, s_h)
+
+	# Reset look-ahead to zero
+	_cur_la_offset_x = 0.0
+	_cur_la_offset_y = 0.0
+
+	# Reset previous target position so initial velocity is 0
 	if _target:
-		var tp := _get_target_pos()
-		var play_rect := get_play_view_rect()
-		var ax := play_rect.position.x + play_rect.size.x * base_anchor_x
-		var ay := play_rect.position.y + play_rect.size.y * base_anchor_y
-		var c := camera_pos_for_screen_target(tp, ax, ay, _cur_height, deg_to_rad(_cur_pitch))
-		_cam_world_pos = c
-		_focus_pos = Vector3(c.x, 0.0, c.z - _cur_distance)
+		_prev_target_pos = _get_target_pos()
+
+	_mode = Mode.FOLLOW
 	_apply()
-	if _save_mgr != null and _level_id != "":
-		_save_mgr.set_custom_data("intro_seen_level_" + _level_id, true)
-		_save_mgr.save_local()
-	_log("intro finished -> FOLLOW")
+
+	_log("intro finished -> Mode.FOLLOW at %s" % str(_cam_world_pos))
 	intro_finished.emit()
 
 func is_intro_playing() -> bool:

@@ -590,8 +590,10 @@ func _load_sun_mode() -> SunInput.Mode:
 ## Shows the chosen control, re-frames the camera for that play view.
 func _apply_sun_mode(mode: SunInput.Mode) -> void:
 	_sun_mode = mode
-	hud.set_sun_mode(mode)
-	run_camera.distance = camera_distance_joystick if mode == SunInput.Mode.JOYSTICK else camera_distance_slider
+	if hud and is_instance_valid(hud):
+		hud.set_sun_mode(mode)
+	if run_camera and is_instance_valid(run_camera):
+		run_camera.distance = camera_distance_joystick if mode == SunInput.Mode.JOYSTICK else camera_distance_slider
 
 ## Pause panel switch: apply now (visible on resume) and persist across levels / restarts.
 func _on_sun_mode_chosen(mode: SunInput.Mode) -> void:
@@ -643,14 +645,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.device == InputEvent.DEVICE_ID_EMULATION:
 		return
 
-	# Intro intercept: any tap/click skips the intro and immediately begins PLAYING
+	# Intro intercept: any tap/click skips the intro and blends smoothly to start pose
 	if state == LevelState.INTRO or (run_camera and run_camera.is_intro_playing()):
 		if (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed) or \
 		   (event is InputEventMouseButton and (event as InputEventMouseButton).pressed):
 			_log("Input intercepted during INTRO -> skip_intro")
-			if run_camera:
+			if run_camera and run_camera.is_intro_playing():
 				run_camera.skip_intro()
-			set_state(LevelState.PLAYING)
+			else:
+				set_state(LevelState.PLAYING)
 			get_viewport().set_input_as_handled()
 		return
 
@@ -891,7 +894,9 @@ func _end_move_drag(viewport_pos: Vector2) -> void:
 	_edge_lead_blend = 0.0
 	dracula.set_drag_state(false, false)
 	var grid := level.grid
-	var world: Variant = _drag_world_pos if _drag_world_pos != null else (ground_point(viewport_pos) if hud.is_in_play_view(viewport_pos) else null)
+	var world: Variant = _drag_world_pos
+	if world == null and hud and hud.is_in_play_view(viewport_pos):
+		world = ground_point(viewport_pos)
 	_drag_world_pos = null
 	if world == null:
 		_settle_marker_on_drag_dest()
