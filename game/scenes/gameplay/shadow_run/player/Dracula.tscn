@@ -2,18 +2,18 @@
 
 [ext_resource type="Script" uid="uid://ddli1hhn0b41p" path="res://game/scenes/gameplay/shadow_run/player/DraculaController.gd" id="1_ctrl"]
 [ext_resource type="AudioStream" uid="uid://dyp4k6olxvaj3" path="res://game/assets/audio/sfx/lane_whoosh.wav" id="3_whoosh"]
-[ext_resource type="AudioStream" uid="uid://055p0frjmtew" path="res://game/assets/audio/sfx/burn_sizzle.wav" id="4_sizzle"]
+[ext_resource type="AudioStream" uid="uid://cl61pxvm4vuuf" path="res://game/assets/audio/sfx/literal fire sound (mp3cut.net).mp3" id="4_23wem"]
 [ext_resource type="AudioStream" uid="uid://bex5e8h3bvw6n" path="res://game/assets/audio/sfx/death_sting.wav" id="5_sting"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.tscn" id="6_visual"]
+[ext_resource type="PackedScene" uid="uid://c7jkjtup563a3" path="res://game/scenes/gameplay/shadow_run/player/DraculaVisual.tscn" id="6_visual"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/BurnFX.tscn" id="11_burn"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/player/DeathFX.tscn" id="12_death"]
-[ext_resource type="Material" path="res://game/assets/materials/dracula/dracula_rim.tres" id="13_rim"]
+[ext_resource type="Material" uid="uid://cu3w2naqtv1i1" path="res://game/assets/materials/dracula/dracula_rim.tres" id="13_rim"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]
 radius = 0.3
 height = 1.6
 
-[node name="Dracula" type="CharacterBody3D" unique_id=1553368858 node_paths=PackedStringArray("visual", "body_visual", "smoke", "embers", "flare_light", "ash", "bats", "sample_points")]
+[node name="Dracula" type="CharacterBody3D" unique_id=1553368858 node_paths=PackedStringArray("visual", "body_visual", "smoke", "embers", "flare_light", "ash", "bats", "sample_points", "burn_audio")]
 editor_description = "Player. Collision layer 2 (player) only: never on shadow_caster, so he never shades himself in the ShadeGrid. Visual = heading / hop / flinch / death transforms; Visual/DraculaVisual = the animated model."
 collision_layer = 2
 collision_mask = 0
@@ -29,8 +29,9 @@ bats = NodePath("DeathFX/Bats")
 sample_points = [NodePath("FootprintC"), NodePath("FootprintL"), NodePath("FootprintR")]
 rim_material = ExtResource("13_rim")
 hop_sfx = ExtResource("3_whoosh")
-sizzle_sfx = ExtResource("4_sizzle")
+sizzle_sfx = ExtResource("4_23wem")
 death_sting_sfx = ExtResource("5_sting")
+burn_audio = NodePath("BurnAudio")
 
 [node name="BodyShape" type="CollisionShape3D" parent="." unique_id=38264405]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
@@ -38,7 +39,7 @@ shape = SubResource("Shape_body")
 
 [node name="Visual" type="Node3D" parent="." unique_id=817363154]
 
-[node name="DraculaVisual" parent="Visual" instance=ExtResource("6_visual")]
+[node name="DraculaVisual" parent="Visual" unique_id=480634203 instance=ExtResource("6_visual")]
 
 [node name="FootprintC" type="Marker3D" parent="." unique_id=174481796]
 editor_description = "Shade sample points: a foot-level footprint at ShadeGrid.sample_height (0.15 m), feet ±0.12 m apart (the model's feet sit at ±0.11–0.14 m). Standing on a shaded cell = all three shaded = no burning."
@@ -53,3 +54,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.15, 0)
 [node name="BurnFX" parent="." unique_id=320148789 instance=ExtResource("11_burn")]
 
 [node name="DeathFX" parent="." unique_id=2018656856 instance=ExtResource("12_death")]
+
+[node name="BurnAudio" type="AudioStreamPlayer" parent="."]
+editor_description = "Plays the Dracula node's sizzle_sfx while he is in sunlight: one copy at a time, each play runs to the end. Set the loudness with volume_db here."

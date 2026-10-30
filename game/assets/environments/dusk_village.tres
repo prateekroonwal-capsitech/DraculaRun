@@ -1,9 +1,8 @@
-[gd_resource type="Environment" load_steps=3 format=3]
+[gd_resource type="Environment" format=3 uid="uid://bgmonaymiw67m"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_dusk"]
 sky_top_color = Color(0.2, 0.18, 0.38, 1)
 sky_horizon_color = Color(0.95, 0.52, 0.3, 1)
-sky_curve = 0.15
 ground_bottom_color = Color(0.1, 0.08, 0.16, 1)
 ground_horizon_color = Color(0.62, 0.36, 0.34, 1)
 sun_angle_max = 8.0
@@ -19,13 +18,12 @@ ambient_light_source = 2
 ambient_light_color = Color(0.38, 0.4, 0.74, 1)
 ambient_light_energy = 0.78
 reflected_light_source = 1
-tonemap_mode = 0
 fog_enabled = true
 fog_mode = 1
 fog_light_color = Color(0.46, 0.4, 0.62, 1)
 fog_light_energy = 0.8
 fog_density = 0.35
+fog_sky_affect = 0.25
+fog_depth_curve = 1.6
 fog_depth_begin = 18.0
 fog_depth_end = 70.0
-fog_depth_curve = 1.6
-fog_sky_affect = 0.25

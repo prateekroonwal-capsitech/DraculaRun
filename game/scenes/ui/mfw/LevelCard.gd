@@ -31,9 +31,7 @@ func setup(entry: LevelCatalogEntry, index: int, is_unlocked: bool, is_completed
 	_is_unlocked = is_unlocked
 	_is_completed = is_completed
 
-	var num_str := str(index + 1)
-	if entry and entry.id != "":
-		num_str = entry.id
+	var num_str := str(index + 1)   # position in the catalog (entry.id is only the save key)
 	_number_label.text = num_str
 
 	var name_str := "Level %s" % num_str

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cl61pxvm4vuuf"
+path="res://.godot/imported/literal fire sound (mp3cut.net).mp3-19e9af8fefe4ecb95f870ef464369f5f.mp3str"
+
+[deps]
+
+source_file="res://game/assets/audio/sfx/literal fire sound (mp3cut.net).mp3"
+dest_files=["res://.godot/imported/literal fire sound (mp3cut.net).mp3-19e9af8fefe4ecb95f870ef464369f5f.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

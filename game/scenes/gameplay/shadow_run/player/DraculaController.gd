@@ -62,8 +62,6 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 @export_group("Burn feedback")
 @export var burn_rim_max: float = 2.4
 @export var burn_light_max: float = 2.5
-## Seconds between sizzle bursts while burning (AudioManager has pooled one-shots, no loop handle).
-@export var sizzle_interval: float = 0.32
 @export var burn_haptic_interval: float = 0.4
 
 @export_group("Death animation")
@@ -98,7 +96,10 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 
 @export_group("Audio")
 @export var hop_sfx: AudioStream
+## Burn sound: repeats (same pitch, one copy, each play finishes) while he stands in sunlight.
 @export var sizzle_sfx: AudioStream
+## Player for sizzle_sfx (BurnAudio in Dracula.tscn; its volume_db sets the loudness).
+@export var burn_audio: AudioStreamPlayer
 @export var death_sting_sfx: AudioStream
 
 var _haptics: HapticsManager
@@ -115,7 +116,6 @@ var _heading: float = 0.0
 var _turning_in_place: bool = false
 var _exposure: float = 0.0
 var _exposure_rising: bool = false
-var _sizzle_timer: float = 0.0
 var _haptic_timer: float = 0.0
 var _cue_tween: Tween
 var _drag_active: bool = false
@@ -135,6 +135,9 @@ func inject_haptics(haptics: HapticsManager) -> void:
 	_haptics = haptics
 
 func _on_ready() -> void:
+	burn_audio.stream = sizzle_sfx
+	if AudioServer.get_bus_index("SFX") >= 0:
+		burn_audio.bus = "SFX"   # same bus as AudioManager's sound effects
 	# dracula_rim.tres is a shared resource that survives scene reloads: reset it.
 	rim_material.set_shader_parameter("intensity", 0.0)
 	flare_light.light_energy = 0.0
@@ -262,6 +265,7 @@ func set_burn_state(exposure: float, exposure_fraction: float) -> void:
 func play_burn_death() -> void:
 	if is_dead_or_dying():
 		return
+	burn_audio.stop()
 	_state = State.DYING
 	_points.clear()
 	_index = 0
@@ -334,7 +338,7 @@ func halt(face_point: Variant = null) -> void:
 	if _state == State.ACTIVE:
 		_state = State.IDLE   # _move() no longer steps a path
 	body_visual.set_motion(0.0)
-	_sizzle_timer = 0.0
+	burn_audio.stop()
 	_haptic_timer = 0.0
 	_exposure_rising = false
 	rim_material.set_shader_parameter("intensity", 0.0)
@@ -359,6 +363,7 @@ func is_hidden() -> bool:
 func play_caught_death() -> void:
 	if is_dead_or_dying():
 		return
+	burn_audio.stop()
 	_state = State.DYING
 	_points.clear()
 	_index = 0
@@ -550,15 +555,13 @@ func _begin_segment() -> void:
 
 func _update_burn_pulses(delta: float) -> void:
 	if not _exposure_rising:
-		_sizzle_timer = 0.0
 		_haptic_timer = 0.0
-		return
-	_sizzle_timer -= delta
+		return   # back in shade: a burn sound already playing finishes, none starts
 	_haptic_timer -= delta
-	if _sizzle_timer <= 0.0:
-		_sizzle_timer = sizzle_interval
-		if _audio and sizzle_sfx:
-			_audio.play_sfx(sizzle_sfx, lerpf(-14.0, -2.0, _exposure / 100.0), randf_range(0.9, 1.15))
+	# In sunlight: one copy of the burn sound at a time, always played to the end; if he is
+	# still in the sun when it ends, it starts again from the top.
+	if not burn_audio.playing and sizzle_sfx and (_audio == null or _audio.is_sfx_enabled()):
+		burn_audio.play()
 	if _haptic_timer <= 0.0:
 		_haptic_timer = burn_haptic_interval
 		if _haptics:
