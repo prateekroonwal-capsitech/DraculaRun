@@ -23,7 +23,7 @@ const FIRST_LEVEL := "res://game/scenes/gameplay/shadow_run/levels/Level01.tscn"
 const SOLVER := preload("res://game/scenes/gameplay/shadow_run/level/level_solver.tres")
 
 @export var retries: int = 5
-@export var level_count: int = 4
+@export var level_count: int = 5
 @export var node_tolerance: int = 4
 @export var step_timeout: float = 25.0
 
@@ -87,6 +87,7 @@ func _run() -> void:
 				_fail("Level Complete panel did not open on level %d" % (li + 1))
 				break
 			_logger.info("Soak: level %d complete (%s mode)" % [li + 1, SunInput.MODE_KEYS[mode]])
+			await _check_halted(feature)
 			panel.next_requested.emit()
 		# "Finish" on the last level returns Home: wait for that load.
 		while scene.is_loading() or not (get_tree().current_scene is HomeScene):
@@ -336,6 +337,29 @@ func _check_drag(f: ShadowRunFeature, home: Vector2i) -> void:
 func _physics_frames(n: int) -> void:
 	for _i in n:
 		await get_tree().physics_frame
+
+## Behind the Level Complete panel nothing moves or can hurt him: Dracula stands still
+## (no path, no speed), input is off, exposure and villagers are switched off.
+func _check_halted(f: ShadowRunFeature) -> void:
+	var pos := f.dracula.global_position
+	await _physics_frames(45)
+	var drift := f.dracula.global_position.distance_to(pos)
+	var problems: Array[String] = []
+	if drift > 0.01:
+		problems.append("he moved %.2f m" % drift)
+	if f.dracula.is_moving() or f.dracula.get_cur_speed() > 0.0 or f.dracula.is_dead_or_dying():
+		problems.append("moving=%s speed=%.2f dying=%s" % [str(f.dracula.is_moving()), f.dracula.get_cur_speed(), str(f.dracula.is_dead_or_dying())])
+	if f.sensor.is_physics_processing() or f.sensor.exposure > 0.0:
+		problems.append("exposure still running (%.1f)" % f.sensor.exposure)
+	for v in f.villagers():
+		if v.is_physics_processing():
+			problems.append("villager %s still active" % v.name)
+	if f.is_running() or f.hud.active_sun_input().is_dragging():
+		problems.append("input still live")
+	if problems.is_empty():
+		_logger.info("Soak: level %d won: Dracula halted, exposure/villagers/input off" % f.level.level_number)
+	else:
+		_fail("level %d won but %s" % [f.level.level_number, ", ".join(problems)])
 
 ## Guard off (the default): the sun turns freely, Dracula burns in sunlight.
 func _check_free_sun(f: ShadowRunFeature) -> void:

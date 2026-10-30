@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://du5jw6bteo21r"]
+[gd_scene format=3 uid="uid://lfkns3j35vhd"]
 
 [ext_resource type="Script" uid="uid://ci4w5cxsugjua" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_ShadowLevel"]
 [ext_resource type="Material" path="res://game/assets/materials/ground_ochre.tres" id="2_ground_ochre"]
@@ -12,7 +12,7 @@
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/haystack_hide.tscn" id="10_haystack_hid"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/covered_cart_hide.tscn" id="11_covered_cart"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/crate_stack_hide.tscn" id="12_crate_stack_"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/barrel_hide.tscn" id="13_barrel_hide"]
+[ext_resource type="PackedScene" uid="uid://bvd5s43hyhidx" path="res://game/scenes/gameplay/shadow_run/props/village/hide/barrel_hide.tscn" id="13_barrel_hide"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/lamp_post.tscn" id="14_lamp_post"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/fence_section.tscn" id="15_fence_sectio"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/villager/Villager.tscn" id="16_Villager"]
@@ -39,17 +39,17 @@ point_count = 2
 
 [sub_resource type="Curve3D" id="Curve3D_6"]
 _data = {
-"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -47.5, 0, 0, 0, 0, 0, 0, -2.5, 0, -47.5),
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -47.5, 0, 0, 0, 0, 0, 0, -1.8622854, 0, -47.5),
 "tilts": PackedFloat32Array(0, 0, 0, 0)
 }
 point_count = 4
 
-[node name="LevelVillage01" type="Node3D" unique_id=1311650315 node_paths=PackedStringArray("start", "goal", "grid")]
-editor_description = "Village Watch: dusk village street. Two patrolling villagers (Villagers/*, each with its Path3D patrol). Sections: A sun swing at the well, B hide and let the red villager pass, C hide in the crates, swing the sun, slip past the blue lantern-bearer. Run level/LevelValidatorRunner.tscn (incl. the patrol check) after edits."
+[node name="Level05" type="Node3D" unique_id=1311650315 node_paths=PackedStringArray("start", "goal", "grid")]
+editor_description = "Village Watch: dusk village street. Two patrolling villagers (Villagers/*, each with its Path3D patrol). Sections: The sun runs by itself on a loop (Auto sun group: auto_sun_keys, hold / move times); the player times moves between holds. A: reach shade that survives the first sweep, B hide and let the red villager pass, C hide in the barrels while the sun sweeps, slip past the blue lantern-bearer. Run level/LevelValidatorRunner.tscn (incl. the patrol check) after edits."
 script = ExtResource("1_ShadowLevel")
-level_number = 4
+level_number = 5
 level_title = "Village Watch"
-hint = "Villagers can't see you in a hiding spot. Tap one to hide."
+hint = "The sun moves by itself here: watch the countdown and hide in time."
 sun_start_azimuth = -45
 sun_start_elevation = 25
 azimuth_min = -70
@@ -57,6 +57,10 @@ azimuth_max = 70
 elevation_min = 18
 elevation_max = 40
 min_sun_adjustments = 2
+auto_sun = true
+auto_sun_keys = PackedVector2Array(-45, 25, -15, 20.4, 60, 18, -17.5, 18)
+auto_sun_first_hold_bonus = 16.0
+tutorial_steps = PackedStringArray("Dusk in the village: the sun moves on its own here. You can\'t steer it.", "The chained sun dial counts down to the sun\'s next move.", "Before it moves, get Dracula into shade that will last, or into a hiding spot.", "Villagers patrol with lanterns. Stay out of their vision cones.", "Tap a haystack, cart, crates or barrels to hide: unseen and safe from the sun.", "Tap anywhere to step out again. Reach the crypt!")
 start = NodePath("Start")
 goal = NodePath("Goal")
 grid = NodePath("ShadeGrid")
@@ -160,12 +164,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.8, 0, -38)
 max_hide_time = 0.0
 
 [node name="barrel_hide_1" parent="Props" unique_id=171760154 instance=ExtResource("13_barrel_hide")]
-editor_description = "Hiding spot: three barrels (barrel.tscn, scaled 1.25 → 0.96 m tall). Solid (obstacle layer), no gameplay shade. Dracula hides from Entry (in front, +Z)."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 98.40906, -44)
-max_hide_time = 0.0
+visible = false
 
 [node name="cottage_small_6" parent="Props" unique_id=338129469 instance=ExtResource("7_cottage_smal")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8, 0, -47)
+
+[node name="cottage_small_7" parent="Props" unique_id=630740848 instance=ExtResource("7_cottage_smal")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 8.052218, 0, -52.81017)
 
 [node name="cottage_large_6" parent="Props" unique_id=938725710 instance=ExtResource("8_cottage_larg")]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -45)
@@ -194,8 +200,17 @@ transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -9)
 [node name="fence_section_3" parent="Props" unique_id=251186361 instance=ExtResource("15_fence_sectio")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -40.5)
 
+[node name="fence_section_5" parent="Props" unique_id=2012949381 instance=ExtResource("15_fence_sectio")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -49.658527)
+
 [node name="fence_section_4" parent="Props" unique_id=498649437 instance=ExtResource("15_fence_sectio")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.4, 0, -42)
+
+[node name="cottage_large_7" parent="Props" unique_id=522552197 instance=ExtResource("8_cottage_larg")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -55.0664)
+
+[node name="fence_section_6" parent="Props" unique_id=1081878563 instance=ExtResource("15_fence_sectio")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.4, 0, -50.86332)
 
 [node name="Villagers" type="Node3D" parent="." unique_id=907716442]
 editor_description = "Villager.tscn instances + their patrol Path3D. Edit the Path3D points with the curve gizmo; assign patrol_path on the villager."

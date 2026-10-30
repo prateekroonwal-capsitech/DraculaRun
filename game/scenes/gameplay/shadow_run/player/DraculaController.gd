@@ -81,6 +81,11 @@ enum State { IDLE, ACTIVE, DYING, DEAD }
 ## Visual scale at the end of the tuck (then the model is hidden).
 @export var hide_scale: float = 0.2
 
+@export_group("Level won")
+## On reaching the goal he turns to face the crypt door before idling.
+@export var win_face_goal: bool = true
+@export var win_turn_time: float = 0.3
+
 @export_group("Caught animation")
 @export var caught_recoil_degrees: float = 28.0
 @export var caught_recoil_time: float = 0.15
@@ -311,6 +316,41 @@ func leave_hiding() -> void:
 	_hide_tween = create_tween().set_parallel()
 	_hide_tween.tween_property(visual, "position", Vector3.ZERO, hide_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	_hide_tween.tween_property(visual, "scale", Vector3.ONE, hide_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+## Level won: stop dead where he is (path, drag target, speed and hop cleared), ease into
+## Idle (DraculaVisual's locomotion blend) and optionally turn to face `face_point`.
+## He stays still until the scene is reloaded (Retry / Next build a fresh Dracula).
+func halt(face_point: Variant = null) -> void:
+	_points.clear()
+	_hops.clear()
+	_index = 0
+	_speed = 0.0
+	_cur_speed = 0.0
+	velocity = Vector3.ZERO
+	_ground_velocity = Vector3.ZERO
+	_turning_in_place = false
+	_drag_active = false
+	_drag_clamped_at_edge = false
+	if _state == State.ACTIVE:
+		_state = State.IDLE   # _move() no longer steps a path
+	body_visual.set_motion(0.0)
+	_sizzle_timer = 0.0
+	_haptic_timer = 0.0
+	_exposure_rising = false
+	rim_material.set_shader_parameter("intensity", 0.0)
+	flare_light.light_energy = 0.0
+	smoke.emitting = false
+	embers.emitting = false
+	var tw := create_tween().set_parallel()
+	tw.tween_property(visual, "position:y", 0.0, 0.12)
+	if win_face_goal and face_point is Vector3:
+		var to: Vector3 = face_point - global_position
+		if Vector2(to.x, to.z).length() > 0.05:
+			var from_heading := _heading
+			var desired := atan2(-to.x, -to.z)
+			_heading = desired
+			tw.tween_method(func(t: float) -> void: visual.rotation.y = lerp_angle(from_heading, desired, t),
+				0.0, 1.0, win_turn_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 func is_hidden() -> bool:
 	return _hidden

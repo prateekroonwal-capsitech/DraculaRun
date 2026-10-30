@@ -1,235 +1,182 @@
-[gd_scene format=3 uid="uid://doutwgkd0fejh"]
+[gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://ci4w5cxsugjua" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_ShadowLevel"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/ShadowLevel.gd" id="1_ShadowLevel"]
 [ext_resource type="Material" path="res://game/assets/materials/ground_ochre.tres" id="2_ground_ochre"]
 [ext_resource type="Material" path="res://game/assets/materials/ground_edge.tres" id="3_ground_edge"]
-[ext_resource type="Script" uid="uid://c672ro20cdtnt" path="res://game/scenes/gameplay/shadow_run/level/ShadeGrid.gd" id="4_ShadeGrid"]
+[ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/level/ShadeGrid.gd" id="4_ShadeGrid"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/goal/CryptDoor.tscn" id="5_CryptDoor"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/cobble_road.tscn" id="6_cobble_road"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/cottage_small.tscn" id="7_cottage_smal"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/cottage_large.tscn" id="8_cottage_larg"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/stone_well.tscn" id="9_stone_well"]
 [ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/haystack_hide.tscn" id="10_haystack_hid"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/covered_cart_hide.tscn" id="11_covered_cart"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/crate_stack_hide.tscn" id="12_crate_stack_"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/hide/barrel_hide.tscn" id="13_barrel_hide"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/lamp_post.tscn" id="14_lamp_post"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/fence_section.tscn" id="15_fence_sectio"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/villager/Villager.tscn" id="16_Villager"]
-[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/ShadowRun.tscn" id="17_ShadowRun"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/lamp_post.tscn" id="11_lamp_post"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/props/village/fence_section.tscn" id="12_fence_sectio"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/villager/Villager.tscn" id="13_Villager"]
+[ext_resource type="PackedScene" path="res://game/scenes/gameplay/shadow_run/ShadowRun.tscn" id="14_ShadowRun"]
+[ext_resource type="Environment" path="res://game/assets/environments/dusk_village.tres" id="15_dusk_village"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
-size = Vector3(12, 0.2, 62)
+size = Vector3(12, 0.2, 42)
 
 [sub_resource type="BoxMesh" id="BoxMesh_2"]
-size = Vector3(14, 0.2, 98)
+size = Vector3(14, 0.2, 78)
 
 [sub_resource type="BoxMesh" id="BoxMesh_3"]
-size = Vector3(14, 0.2, 98)
+size = Vector3(14, 0.2, 78)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_4"]
-size = Vector3(40, 0.2, 98)
+size = Vector3(40, 0.2, 78)
 
 [sub_resource type="Curve3D" id="Curve3D_5"]
 _data = {
-"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -3, 0, -19.5, 0, 0, 0, 0, 0, 0, -3, 0, -31),
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -4.5, 0, -19, 0, 0, 0, 0, 0, 0, 4.5, 0, -19),
 "tilts": PackedFloat32Array(0, 0)
 }
 point_count = 2
 
-[sub_resource type="Curve3D" id="Curve3D_6"]
-_data = {
-"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -41.5, 0, 0, 0, 0, 0, 0, 2.5, 0, -47.5, 0, 0, 0, 0, 0, 0, -2.5, 0, -47.5),
-"tilts": PackedFloat32Array(0, 0, 0, 0)
-}
-point_count = 4
-
-[node name="Level04" type="Node3D" unique_id=1311650315 node_paths=PackedStringArray("start", "goal", "grid")]
-editor_description = "Village Watch: dusk village street. Two patrolling villagers (Villagers/*, each with its Path3D patrol). Sections: The sun runs by itself on a loop (Auto sun group: auto_sun_keys, hold / move times); the player times moves between holds. A: reach shade that survives the first sweep, B hide and let the red villager pass, C hide in the barrels while the sun sweeps, slip past the blue lantern-bearer. Run level/LevelValidatorRunner.tscn (incl. the patrol check) after edits."
+[node name="Level04" type="Node3D" node_paths=PackedStringArray("start", "goal", "grid")]
+editor_description = "Village Edge: a gentle introduction to the village. Short dusk street, ONE villager walking straight across the street and back (vision_range 4.5 m, small lantern radius). A: one sun adjustment, as in levels 1-3. B: the haystack sits beside the villager's crossing: hide while he looks your way, go when he turns his back. C: open shade to the crypt. Run level/LevelValidatorRunner.tscn after edits."
 script = ExtResource("1_ShadowLevel")
 level_number = 4
-level_title = "Village Watch"
-hint = "The sun moves by itself here: watch the countdown and hide in time."
+level_title = "Village Edge"
+hint = "Tap the haystack to hide from the villager."
+sun_start_azimuth = -45
+sun_start_elevation = 28
 azimuth_min = -70
 azimuth_max = 70
-elevation_min = 18
+elevation_min = 20
 elevation_max = 40
-min_sun_adjustments = 2
-sun_start_azimuth = -45
-sun_start_elevation = 25
-auto_sun = true
-auto_sun_keys = PackedVector2Array(-45, 25, -15, 20.4, 60, 18, -17.5, 18)
-auto_sun_hold_time = 8
-auto_sun_move_time = 3
-auto_sun_first_hold_bonus = 16.0
-tutorial_steps = PackedStringArray("Dusk in the village: the sun moves on its own here. You can't steer it.", "The chained sun dial counts down to the sun's next move.", "Before it moves, get Dracula into shade that will last, or into a hiding spot.", "Villagers patrol with lanterns. Stay out of their vision cones.", "Tap a haystack, cart, crates or barrels to hide: unseen and safe from the sun.", "Tap anywhere to step out again. Reach the crypt!")
-tutorial_step_time = 4.0
+min_sun_adjustments = 1
 start = NodePath("Start")
 goal = NodePath("Goal")
 grid = NodePath("ShadeGrid")
+tutorial_steps = PackedStringArray("Welcome to the village. Turn the sun to make a shadow path, as before.", "A villager crosses the street. The cone on the ground shows where he looks.", "Tap the haystack to hide. He can't see you in there.", "When he turns his back, tap ahead to step out and run past.")
+tutorial_step_time = 4.5
 
-[node name="Ground" type="StaticBody3D" parent="." unique_id=608875660]
+[node name="Ground" parent="." type="StaticBody3D"]
 collision_mask = 0
 
-[node name="Floor" type="MeshInstance3D" parent="Ground" unique_id=1101792647]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -27.5)
+[node name="Floor" parent="Ground" type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -17.5)
 mesh = SubResource("BoxMesh_1")
 surface_material_override/0 = ExtResource("2_ground_ochre")
 
-[node name="OuterL" type="MeshInstance3D" parent="Ground" unique_id=508732635]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, -0.12, -27.5)
+[node name="OuterL" parent="Ground" type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, -0.12, -17.5)
 mesh = SubResource("BoxMesh_2")
 surface_material_override/0 = ExtResource("3_ground_edge")
 
-[node name="OuterR" type="MeshInstance3D" parent="Ground" unique_id=78852348]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, -0.12, -27.5)
+[node name="OuterR" parent="Ground" type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, -0.12, -17.5)
 mesh = SubResource("BoxMesh_3")
 surface_material_override/0 = ExtResource("3_ground_edge")
 
-[node name="GroundShape" type="CollisionShape3D" parent="Ground" unique_id=1256145857]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -27.5)
+[node name="GroundShape" parent="Ground" type="CollisionShape3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -17.5)
 shape = SubResource("BoxShape3D_4")
 
-[node name="ShadeGrid" type="Node3D" parent="." unique_id=1657685799]
+[node name="ShadeGrid" parent="." type="Node3D"]
 editor_description = "Walkable ground grid: covers x 0..size.x, z 0..-size.y from this node. Cell = 0.4 m."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 1.5)
 script = ExtResource("4_ShadeGrid")
-size = Vector2(12, 58)
+size = Vector2(12, 38)
+cell_size = 0.4
+max_hop_distance = 1.0
 
-[node name="Start" type="Marker3D" parent="." unique_id=52348844]
+[node name="Start" parent="." type="Marker3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -2)
 
-[node name="Goal" parent="." unique_id=1647827792 instance=ExtResource("5_CryptDoor")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -52.5)
+[node name="Goal" parent="." instance=ExtResource("5_CryptDoor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -33)
 
-[node name="Road" type="Node3D" parent="." unique_id=550428003]
+[node name="Road" parent="." type="Node3D"]
 
-[node name="cobble_road_0" parent="Road" unique_id=542670106 instance=ExtResource("6_cobble_road")]
+[node name="cobble_road_0" parent="Road" instance=ExtResource("6_cobble_road")]
 transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 3.5, 0, 0, -5.5)
 
-[node name="cobble_road_1" parent="Road" unique_id=716632057 instance=ExtResource("6_cobble_road")]
+[node name="cobble_road_1" parent="Road" instance=ExtResource("6_cobble_road")]
 transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 3.5, 0, 0, -19.5)
 
-[node name="cobble_road_2" parent="Road" unique_id=576662438 instance=ExtResource("6_cobble_road")]
-transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 3.5, 0, 0, -33.5)
+[node name="cobble_road_2" parent="Road" instance=ExtResource("6_cobble_road")]
+transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 2.5, 0, 0, -31.5)
 
-[node name="cobble_road_3" parent="Road" unique_id=146475313 instance=ExtResource("6_cobble_road")]
-transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 3.5, 0, 0, -47.5)
+[node name="Props" parent="." type="Node3D"]
 
-[node name="cobble_road_4" parent="Road" unique_id=86140846 instance=ExtResource("6_cobble_road")]
-transform = Transform3D(1.5, 0, 0, 0, 1, 0, 0, 0, 0.5, 0, 0, -55.5)
-
-[node name="Props" type="Node3D" parent="." unique_id=386574300]
-
-[node name="cottage_small_1" parent="Props" unique_id=522312042 instance=ExtResource("7_cottage_smal")]
+[node name="cottage_small_1" parent="Props" instance=ExtResource("7_cottage_smal")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8, 0, -2.5)
 
-[node name="cottage_large_1" parent="Props" unique_id=1308621885 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -7.5)
+[node name="cottage_large_1" parent="Props" instance=ExtResource("8_cottage_larg")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -9)
 
-[node name="cottage_large_2" parent="Props" unique_id=1282077227 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -13)
+[node name="stone_well_1" parent="Props" instance=ExtResource("9_stone_well")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -5)
 
-[node name="cottage_small_2" parent="Props" unique_id=2020068836 instance=ExtResource("7_cottage_smal")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8, 0, -18.5)
+[node name="cottage_large_2" parent="Props" instance=ExtResource("8_cottage_larg")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -15)
 
-[node name="stone_well_1" parent="Props" unique_id=1588821275 instance=ExtResource("9_stone_well")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, -11)
+[node name="cottage_small_2" parent="Props" instance=ExtResource("7_cottage_smal")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8, 0, -21.5)
 
-[node name="haystack_hide_1" parent="Props" unique_id=962340873 instance=ExtResource("10_haystack_hid")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0, -17.5)
-max_hide_time = 0.0
+[node name="cottage_small_3" parent="Props" instance=ExtResource("7_cottage_smal")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8, 0, -16.5)
 
-[node name="cottage_large_3" parent="Props" unique_id=1522233627 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -22)
+[node name="cottage_large_3" parent="Props" instance=ExtResource("8_cottage_larg")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -22.5)
 
-[node name="cottage_small_3" parent="Props" unique_id=599041327 instance=ExtResource("7_cottage_smal")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8, 0, -28)
+[node name="haystack_hide_1" parent="Props" instance=ExtResource("10_haystack_hid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, -14.5)
 
-[node name="cottage_small_4" parent="Props" unique_id=1011401306 instance=ExtResource("7_cottage_smal")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8, 0, -25)
+[node name="cottage_large_4" parent="Props" instance=ExtResource("8_cottage_larg")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -32.5)
 
-[node name="cottage_large_4" parent="Props" unique_id=1539950283 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -31)
+[node name="cottage_small_4" parent="Props" instance=ExtResource("7_cottage_smal")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8, 0, -28)
 
-[node name="covered_cart_hide_1" parent="Props" unique_id=1624709281 instance=ExtResource("11_covered_cart")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -30)
-max_hide_time = 0.0
+[node name="lamp_post_1" parent="Props" instance=ExtResource("11_lamp_post")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.6, 0, -8)
 
-[node name="cottage_large_5" parent="Props" unique_id=1840530683 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8.4, 0, -38)
+[node name="lamp_post_2" parent="Props" instance=ExtResource("11_lamp_post")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.6, 0, -26.5)
 
-[node name="cottage_small_5" parent="Props" unique_id=972640626 instance=ExtResource("7_cottage_smal")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8, 0, -36)
+[node name="fence_section_1" parent="Props" instance=ExtResource("12_fence_sectio")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -4)
 
-[node name="crate_stack_hide_1" parent="Props" unique_id=27761264 instance=ExtResource("12_crate_stack_")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.8, 0, -38)
-max_hide_time = 0.0
+[node name="fence_section_2" parent="Props" instance=ExtResource("12_fence_sectio")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.4, 0, -25.5)
 
-[node name="barrel_hide_1" parent="Props" unique_id=171760154 instance=ExtResource("13_barrel_hide")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 98.40906, -44)
-visible = false
-max_hide_time = 0.0
-
-[node name="cottage_small_6" parent="Props" unique_id=338129469 instance=ExtResource("7_cottage_smal")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -8, 0, -47)
-
-[node name="cottage_large_6" parent="Props" unique_id=938725710 instance=ExtResource("8_cottage_larg")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 8.4, 0, -45)
-
-[node name="lamp_post_1" parent="Props" unique_id=758531895 instance=ExtResource("14_lamp_post")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 0, -6)
-
-[node name="lamp_post_2" parent="Props" unique_id=1153199778 instance=ExtResource("14_lamp_post")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.4, 0, -16)
-
-[node name="lamp_post_3" parent="Props" unique_id=1058696255 instance=ExtResource("14_lamp_post")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 0, -26)
-
-[node name="lamp_post_4" parent="Props" unique_id=1370158883 instance=ExtResource("14_lamp_post")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.4, 0, -36)
-
-[node name="lamp_post_5" parent="Props" unique_id=249651607 instance=ExtResource("14_lamp_post")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 0, -50)
-
-[node name="fence_section_1" parent="Props" unique_id=2070623471 instance=ExtResource("15_fence_sectio")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.4, 0, -15)
-
-[node name="fence_section_2" parent="Props" unique_id=772676943 instance=ExtResource("15_fence_sectio")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -9)
-
-[node name="fence_section_3" parent="Props" unique_id=251186361 instance=ExtResource("15_fence_sectio")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 6.4, 0, -40.5)
-
-[node name="fence_section_4" parent="Props" unique_id=498649437 instance=ExtResource("15_fence_sectio")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.4, 0, -42)
-
-[node name="Villagers" type="Node3D" parent="." unique_id=907716442]
+[node name="Villagers" parent="." type="Node3D"]
 editor_description = "Villager.tscn instances + their patrol Path3D. Edit the Path3D points with the curve gizmo; assign patrol_path on the villager."
 
-[node name="VillagerRedPatrol" type="Path3D" parent="Villagers" unique_id=732831205]
+[node name="VillagerGreenPatrol" parent="Villagers" type="Path3D"]
 curve = SubResource("Curve3D_5")
 
-[node name="VillagerRed" parent="Villagers" unique_id=1245506421 node_paths=PackedStringArray("patrol_path") instance=ExtResource("16_Villager")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -19.5)
-tunic_color = Color(0.62, 0.16, 0.12, 1)
-vest_color = Color(0.3, 0.24, 0.16, 1)
-cap_color = Color(0.36, 0.1, 0.08, 1)
-trousers_color = Color(0.22, 0.18, 0.14, 1)
-patrol_path = NodePath("../VillagerRedPatrol")
+[node name="VillagerGreen" parent="Villagers" instance=ExtResource("13_Villager") node_paths=PackedStringArray("patrol_path")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 0, -19)
+patrol_path = NodePath("../VillagerGreenPatrol")
 patrol_mode = 1
-wait_time = 2.5
+wait_time = 3
+walk_speed = 1.2
+start_time_offset = 0
+vision_range = 4.5
+lantern_spot_radius = 1.0
+tunic_color = Color(0.24, 0.42, 0.2, 1)
+vest_color = Color(0.4, 0.32, 0.2, 1)
+cap_color = Color(0.2, 0.26, 0.14, 1)
+trousers_color = Color(0.24, 0.2, 0.16, 1)
 
-[node name="VillagerBluePatrol" type="Path3D" parent="Villagers" unique_id=517149210]
-curve = SubResource("Curve3D_6")
+[node name="Game" parent="." instance=ExtResource("14_ShadowRun")]
 
-[node name="VillagerBlue" parent="Villagers" unique_id=1261102859 node_paths=PackedStringArray("patrol_path") instance=ExtResource("16_Villager")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, -41.5)
-tunic_color = Color(0.18, 0.3, 0.55, 1)
-vest_color = Color(0.42, 0.36, 0.24, 1)
-cap_color = Color(0.12, 0.16, 0.3, 1)
-trousers_color = Color(0.24, 0.22, 0.2, 1)
-patrol_path = NodePath("../VillagerBluePatrol")
-wait_time = 1.5
+[node name="ShadowRunFeature" parent="Game" node_paths=PackedStringArray("level")]
+level = NodePath("../..")
 
-[node name="Game" parent="." unique_id=289952759 instance=ExtResource("17_ShadowRun")]
+[node name="WorldEnvironment" parent="Game"]
+environment = ExtResource("15_dusk_village")
+
+[node name="SunRig" parent="Game"]
+sun_color = Color(1, 0.72, 0.48, 1)
+sun_energy = 1.2
+
+[node name="Sun" parent="Game/SunRig"]
+light_color = Color(1, 0.72, 0.48, 1)
+light_energy = 1.2

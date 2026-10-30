@@ -63,21 +63,12 @@ func _build_cards() -> void:
 	if catalog == null:
 		return
 
-	var current_prog_level := 1
-	var max_unlocked := 1
-	if _save:
-		current_prog_level = _save.get_level()
-		if _save.progression_data:
-			max_unlocked = maxi(_save.progression_data.unlocked_levels, current_prog_level)
-
+	LevelProgress.migrate(_save, catalog)   # old position-based saves → ids (once)
 	var count := catalog.get_level_count()
 	for i in range(count):
 		var entry := catalog.get_entry(i)
-		var lvl_num := i + 1
-		var is_unlocked: bool = unlock_all_levels or (lvl_num <= max_unlocked)
-		var is_completed: bool = (lvl_num < current_prog_level)
-		if _save and _save.progression_data and _save.progression_data.level_stars.has("stage_" + str(lvl_num)):
-			is_completed = true
+		var is_unlocked: bool = unlock_all_levels or LevelProgress.is_unlocked(_save, catalog, i)
+		var is_completed: bool = entry != null and LevelProgress.is_completed(_save, entry.id)
 
 		var card := card_scene.instantiate() as LevelCard
 		_grid.add_child(card)
@@ -88,11 +79,7 @@ func _build_cards() -> void:
 func _preload_next_unplayed() -> void:
 	if _scene == null or catalog == null:
 		return
-	var current_prog_level := 1
-	if _save:
-		current_prog_level = _save.get_level()
-	var next_idx := current_prog_level - 1
-	var entry := catalog.get_entry(next_idx)
+	var entry := catalog.get_entry(LevelProgress.next_index(_save, catalog))
 	if entry and entry.scene_path != "":
 		_scene.preload_scene(entry.scene_path)
 
@@ -104,15 +91,7 @@ func _on_card_pressed(index: int) -> void:
 	if entry == null:
 		return
 
-	var current_prog_level := 1
-	var max_unlocked := 1
-	if _save:
-		current_prog_level = _save.get_level()
-		if _save.progression_data:
-			max_unlocked = maxi(_save.progression_data.unlocked_levels, current_prog_level)
-
-	var lvl_num := index + 1
-	var is_unlocked: bool = unlock_all_levels or (lvl_num <= max_unlocked)
+	var is_unlocked: bool = unlock_all_levels or LevelProgress.is_unlocked(_save, catalog, index)
 
 	var card := _cards[index] if index < _cards.size() else null
 

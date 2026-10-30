@@ -8,6 +8,8 @@ const FIRST_LEVEL_SCENE := "res://game/scenes/gameplay/shadow_run/levels/Level01
 
 ## Level select panel opened by the Play button.
 @export var level_select_panel: PackedScene = preload("res://game/scenes/ui/mfw/LevelSelectPanel.tscn")
+## Level list; "Levels cleared" counts its completed entries (LevelProgress, by id).
+@export var level_catalog: LevelCatalog = preload("res://game/scenes/gameplay/shadow_run/level/level_catalog.tres")
 
 @onready var label: Label = $CenterContainer/VBoxContainer/Label
 @onready var sub_label: Label = $CenterContainer/VBoxContainer/SubLabel
@@ -37,8 +39,11 @@ func _on_ready() -> void:
 		_logger.info("HomeScene loaded successfully.")
 	play_button.pressed.connect(_on_play_pressed)
 	play_button.grab_focus.call_deferred()
-	if _save and _save.get_level() > 1:
-		sub_label.text = "Levels cleared: %d" % (_save.get_level() - 1)
+	if _save:
+		LevelProgress.migrate(_save, level_catalog)
+		var cleared := LevelProgress.completed_count(_save, level_catalog)
+		if cleared > 0:
+			sub_label.text = "Levels cleared: %d" % cleared
 
 func _on_play_pressed() -> void:
 	print("[STARTUP %dms] HomeScene._on_play_pressed" % Time.get_ticks_msec())

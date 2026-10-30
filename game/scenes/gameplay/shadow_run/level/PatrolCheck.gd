@@ -42,6 +42,8 @@ func check(level: ShadowLevel, plan_result: Dictionary, solver: LevelSolver) -> 
 	var villagers: Array[VillagerController] = []
 	var hide_cells: Dictionary = {}   # cell index -> name
 	for node in level.find_children("*", "Node3D", true, false):
+		if not (node as Node3D).is_visible_in_tree():
+			continue   # hidden in the editor = not in the level
 		if node is VillagerController:
 			villagers.append(node)
 		elif node is HideSpot:

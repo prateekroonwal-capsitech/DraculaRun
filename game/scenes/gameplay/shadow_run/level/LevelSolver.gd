@@ -233,7 +233,7 @@ func _collect_hide_spots(level: ShadowLevel) -> void:
 	_hide.resize(_n)
 	_hide_paths.clear()
 	for node in level.find_children("*", "Node3D", true, false):
-		if node is HideSpot:
+		if node is HideSpot and (node as Node3D).is_visible_in_tree():   # hidden in the editor = not in the level
 			var hc := _grid.cell_at((node as HideSpot).entry_position())
 			if _grid.in_bounds(hc):
 				_hide[_grid.index_of(hc)] = 1

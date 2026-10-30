@@ -46,6 +46,10 @@ godot --headless --path . res://game/scenes/test/ShadowRunSoakTest.tscn
 godot --headless --path . res://game/scenes/test/VillagerStealthTest.tscn
 ```
 
+```bash
+godot --headless --path . res://game/scenes/test/LevelProgressTest.tscn
+```
+
 Each tool exits with code 0 on success.
 
 - `--verbose=N` prints level N's walkable map at the level's minimum, start and maximum
@@ -255,7 +259,9 @@ Level Complete panel:
 - **Retry** reloads the level.
 - **Home** returns to the Home scene.
 
-**Completion** calls `SaveManager.complete_level(level_number, 3, 100)` then `save_game()`.
+**Completion** stops Dracula dead (`DraculaController.halt()`: path, drag target and speed cleared, Idle blend, turns to face the crypt door), switches off input, the sun controls, exposure and the villagers, then records the level by its catalog **id** (`LevelProgress.complete()`) and saves. Retry / Next reload the scene, so nothing carries over.
+
+**Progress is saved by catalog id** (`level/LevelProgress.gd`): completions in `ProgressionData.level_stars[id]`, extra unlocks in the `unlocked_level_ids` save value. A level is unlocked if it is first, completed, in that list, or its predecessor is completed; `current_level` / `unlocked_levels` are kept as summary counters. Saves from before ids (position keys `stage_N`) are migrated once by `LevelProgress.migrate()` using `LevelCatalog.legacy_v1_order` (`1, 2, 3, village_watch`): the old 4th level was Village Watch, now 5th; the new Village Edge starts uncompleted but unlocked. Never reorder `legacy_v1_order`; to insert a level, add an entry with a new id.
 It emits `GameBus.level_completed` and calls `GameManager.game_over("level_complete")`.
 Home's Play opens Level01 and shows "Levels cleared: N".
 
@@ -267,7 +273,8 @@ Home's Play opens Level01 and shows "Levels cleared: N".
 | 2 · Two Alleys (start el 38°) | **Branching.** A chapel splits the street. Left route: switch the sun early, in the spire's shadow in front of the chapel, and use the chapel's shadow down the left alley. Right route: use the chapel's shadow down the right alley at the start angle, then switch late at the gargoyle by the exit. | Start −35°; one switch, early or late |
 | 3 · The Narrow Gate (start el 32°) | **Timing.** A 2.4 m gate between castle walls. With the sun nearly ahead, the **covered wagon's** shadow fills the gap, so the wagon is both what blocks the path and what lets you through. Past it, swing further left so the wagon throws shade beside itself, slip around it, and reach the crypt in the left buildings' shadow. | Start +30°; two adjustments |
 
-| 4 · Village Watch (`levels/Level04.tscn`) | **Stealth + a sun you can't steer.** The sun runs by itself on a loop (hold 8 s, sweep 3 s). Before each sweep, get Dracula onto shade that lasts through it, or into a hiding spot. **A:** wait out the first sweep by the start. **B:** run up the street and slip past the red villager (haystack to hide in) to the crates. **C:** hide in the barrels while the sun swings past, then slip by the blue lantern-bearer to the crypt. A six-line tutorial plays at the start. | Auto sun: keys (−45°, 25°) → (−15°, 20.4°) → (60°, 18°) → (−17.5°, 18°), loop; first hold +16 s |
+| 4 · Village Edge (`levels/Level04.tscn`) | **Gentle village intro.** Short dusk street, ONE villager walking straight across the street and back (vision 4.5 m, lantern radius 1 m). **A:** one forgiving sun swing at the start (27° window). **B:** the haystack beside his crossing: hide while he looks your way, go when he turns his back (15 s gap). **C:** open shade to the crypt. A four-line tutorial plays at the start. | Start −45° / el 28°; az −70…70°, el 20…40°; 1 adjustment |
+| 5 · Village Watch (`levels/Level05.tscn`) | **Stealth + a sun you can't steer.** The sun runs by itself on a loop (hold 8 s, sweep 3 s). Before each sweep, get Dracula onto shade that lasts through it, or into a hiding spot. **A:** wait out the first sweep by the start. **B:** run up the street and slip past the red villager (haystack to hide in) to the crates. **C:** hide in the barrels while the sun swings past, then slip by the blue lantern-bearer to the crypt. A six-line tutorial plays at the start. | Auto sun: keys (−45°, 25°) → (−15°, 20.4°) → (60°, 18°) → (−17.5°, 18°), loop; first hold +16 s |
 
 Levels 1–3 use the full default ranges (azimuth −80…80°, elevation 15…65°).
 

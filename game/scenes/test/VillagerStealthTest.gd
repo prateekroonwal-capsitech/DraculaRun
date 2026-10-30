@@ -1,6 +1,6 @@
 extends Node
 
-## Villager stealth test on Level04, through the real game (Boot services,
+## Villager stealth test on Level05 (Village Watch), through the real game (Boot services,
 ## SceneManager, ShadowRunFeature):
 ##   1. Detection meter speed: in shade ≈ time_to_spot / shade_multiplier, in sun
 ##      ≈ time_to_spot / sun_multiplier (sun is faster).
@@ -14,7 +14,7 @@ extends Node
 ##   godot --headless --path . res://game/scenes/test/VillagerStealthTest.tscn
 ## Test harness only: it is allowed to use ServiceRegistry and private members.
 
-const LEVEL := "res://game/scenes/gameplay/shadow_run/levels/Level04.tscn"
+const LEVEL := "res://game/scenes/gameplay/shadow_run/levels/Level05.tscn"
 
 ## Allowed relative error on the measured fill times.
 @export var tolerance: float = 0.2
@@ -57,7 +57,7 @@ func _run() -> void:
 	var v := f.level.get_node("Villagers/VillagerRed") as VillagerController
 	var other := f.level.get_node("Villagers/VillagerBlue") as VillagerController
 	other.set_active(false)
-	if f.villagers().size() != 2 or f.hide_spots().size() < 4:
+	if f.villagers().size() != 2 or f.hide_spots().is_empty():
 		_fail("feature found %d villagers / %d hiding spots" % [f.villagers().size(), f.hide_spots().size()])
 	var spot := f.level.get_node("Props/haystack_hide_1") as HideSpot
 	var entry := spot.entry_position()

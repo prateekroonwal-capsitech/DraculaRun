@@ -7,7 +7,7 @@
 
 [node name="LevelValidatorRunner" type="Node3D" node_paths=PackedStringArray("logger")]
 script = ExtResource("1_run")
-level_scenes = PackedStringArray("res://game/scenes/gameplay/shadow_run/levels/Level01.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level02.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level03.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level04.tscn")
+level_scenes = PackedStringArray("res://game/scenes/gameplay/shadow_run/levels/Level01.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level02.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level03.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level04.tscn", "res://game/scenes/gameplay/shadow_run/levels/Level05.tscn")
 solver = ExtResource("2_solver")
 patrol_check = ExtResource("4_patrol")
 logger = NodePath("Logger")

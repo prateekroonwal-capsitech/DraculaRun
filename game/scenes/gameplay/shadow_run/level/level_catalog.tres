@@ -23,10 +23,17 @@ scene_path = "res://game/scenes/gameplay/shadow_run/levels/Level03.tscn"
 
 [sub_resource type="Resource" id="Resource_lvl4"]
 script = ExtResource("2_entry")
-id = "4"
-display_name = "Village Watch"
+id = "village_edge"
+display_name = "Village Edge"
 scene_path = "res://game/scenes/gameplay/shadow_run/levels/Level04.tscn"
+
+[sub_resource type="Resource" id="Resource_lvl5"]
+script = ExtResource("2_entry")
+id = "village_watch"
+display_name = "Village Watch"
+scene_path = "res://game/scenes/gameplay/shadow_run/levels/Level05.tscn"
 
 [resource]
 script = ExtResource("1_cat")
-entries = Array[ExtResource("2_entry")]([SubResource("Resource_lvl1"), SubResource("Resource_lvl2"), SubResource("Resource_lvl3"), SubResource("Resource_lvl4")])
+entries = Array[ExtResource("2_entry")]([SubResource("Resource_lvl1"), SubResource("Resource_lvl2"), SubResource("Resource_lvl3"), SubResource("Resource_lvl4"), SubResource("Resource_lvl5")])
+legacy_v1_order = PackedStringArray("1", "2", "3", "village_watch")

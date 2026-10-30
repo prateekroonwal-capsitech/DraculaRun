@@ -7,6 +7,10 @@ extends Resource
 const LevelCatalogEntry = preload("res://game/scenes/gameplay/shadow_run/level/LevelCatalogEntry.gd")
 
 @export var entries: Array[LevelCatalogEntry] = []
+## Entry ids in the order the levels had when progress was still saved by position
+## (save format v1: "stage_N" = the N-th id here). LevelProgress.migrate() uses it once to
+## move old saves onto ids. Never reorder or edit it; add new levels to `entries` only.
+@export var legacy_v1_order: PackedStringArray = PackedStringArray()
 
 func get_level_count() -> int:
 	return entries.size()

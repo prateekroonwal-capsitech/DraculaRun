@@ -219,6 +219,7 @@ var _hide_target: HideSpot          # spot he is walking to
 var _pending_hide: HideSpot         # hide tap made while the shade was updating
 var _pick_query: PhysicsRayQueryParameters3D
 var _auto_sun_clock: float = 0.0
+var _entry_id: String = ""         # this level's catalog id (progress is saved by id)
 
 func _queue_touch_event(type: String, index: int, pos: Vector2) -> void:
 	if type == "MOVE" and not _queued_touch_events.is_empty():
@@ -320,6 +321,7 @@ func _setup() -> void:
 		var sc_path := level.scene_file_path
 		var entry := catalog.get_entry_by_scene(sc_path)
 		if entry:
+			_entry_id = entry.id
 			var idx := catalog.get_index_by_scene(sc_path)
 			level.level_number = idx + 1
 			level.level_title = entry.display_name
@@ -463,7 +465,7 @@ func start() -> void:
 			_log("intro finished -> entering PLAYING")
 			set_state(LevelState.PLAYING)
 		run_camera.intro_finished.connect(on_intro_done, CONNECT_ONE_SHOT)
-		run_camera.play_intro(level.goal.global_position, dracula.global_position, _save, str(level.level_number))
+		run_camera.play_intro(level.goal.global_position, dracula.global_position, _save, _entry_id if _entry_id != "" else str(level.level_number))
 	else:
 		_log("no goal or camera -> entering PLAYING directly")
 		set_state(LevelState.PLAYING)
@@ -1095,6 +1097,8 @@ func _setup_stealth() -> void:
 	_villagers.clear()
 	_hide_spots.clear()
 	for node in level.find_children("*", "Node3D", true, false):
+		if not (node as Node3D).is_visible_in_tree():
+			continue   # hidden in the editor = not part of the level
 		if node is VillagerController:
 			var v := node as VillagerController
 			v.setup(dracula, level.grid, sensor, _bus)
@@ -1252,15 +1256,28 @@ func region_mask() -> PackedByteArray:
 func _on_goal_reached() -> void:
 	if state != LevelState.PLAYING or _finished or not _running:
 		return
-	set_state(LevelState.WON)
+	set_state(LevelState.WON)   # also switches the villagers off (they idle)
 	_finished = true
 	_running = false
+	# Nothing may move or hurt him behind the win panel: no input, no pending moves,
+	# no exposure, no detection. Retry / Next reload the scene, so everything starts clean.
 	_cancel_move_drag()
+	_pending_tap = null
+	_pending_hide = null
+	_hide_target = null
+	_path_points = PackedVector3Array()
+	_raw_path_points = PackedVector3Array()
 	sensor.set_active(false)
-	dracula.stop_at_next_waypoint()
+	sensor.exposure = 0.0
+	sensor.exposure_fraction = 0.0
+	_bus.sun_exposure_changed.emit(0.0)
+	dracula.halt(level.goal.global_position)
 	hud.set_controls_enabled(false)
 	if _save:
-		_save.complete_level(level.level_number, 3, 100)
+		if catalog and _entry_id != "":
+			LevelProgress.complete(_save, catalog, _entry_id, 3, 100)
+		else:
+			_save.complete_level(level.level_number, 3, 100)
 		_save.save_game()
 	_game.game_over("level_complete")   # → GameBus.game_over("level_complete")
 	if _logger:
