@@ -3,14 +3,15 @@
 [ext_resource type="Script" path="res://game/scenes/gameplay/shadow_run/sun/SunRig.gd" id="1_sun"]
 
 [node name="SunRig" type="Node3D" node_paths=PackedStringArray("light")]
-editor_description = "Sun feel lives here (Motion group): max speeds, smoothing, min_follow_speed, settle_threshold. Azimuth/elevation ranges and the start angle come from the level (ShadowLevel) at runtime. Shadows: hard edges (shadow_blur 0, mobile hard filter), 2 cascades, 45 m."
+editor_description = "Sun feel lives here (Motion group): max speeds, sun_follow_speed, settle_threshold. Azimuth/elevation ranges and the start angle come from the level (ShadowLevel) at runtime. Shadows: 2 cascades, blend splits, stable mobile filtering."
 script = ExtResource("1_sun")
 light = NodePath("Sun")
 max_azimuth_speed = 180.0
 max_elevation_speed = 180.0
-smoothing = 22.0
-min_follow_speed = 60.0
-settle_threshold = 0.25
+sun_follow_speed = 12.0
+settle_threshold = 0.15
+guard_search_steps = 8
+guard_hysteresis_margin = 0.5
 sun_color = Color(1, 0.82, 0.42, 1)
 sun_energy = 1.5
 
@@ -19,12 +20,12 @@ light_color = Color(1, 0.82, 0.42, 1)
 light_energy = 1.5
 light_specular = 0.0
 shadow_enabled = true
-shadow_bias = 0.08
-shadow_normal_bias = 2.0
-shadow_blur = 0.0
+shadow_bias = 0.03
+shadow_normal_bias = 1.2
+shadow_blur = 1.0
 directional_shadow_mode = 1
-directional_shadow_split_1 = 0.25
-directional_shadow_blend_splits = false
-directional_shadow_fade_start = 0.95
-directional_shadow_max_distance = 75.0
+directional_shadow_split_1 = 0.3
+directional_shadow_blend_splits = true
+directional_shadow_fade_start = 0.9
+directional_shadow_max_distance = 45.0
 directional_shadow_pancake_size = 20.0

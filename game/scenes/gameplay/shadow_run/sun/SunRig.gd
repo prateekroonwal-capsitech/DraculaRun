@@ -30,14 +30,14 @@ signal guard_blocked
 ## Hard cap on angular speed, degrees per second.
 @export var max_azimuth_speed: float = 180.0
 @export var max_elevation_speed: float = 180.0
-## Exponential smoothing toward the target (1/s). Higher = snappier (lag ≈ 1/smoothing s).
-@export var smoothing: float = 22.0
-## Minimum catch-up speed (°/s) so the exponential tail never crawls after the finger stops.
-@export var min_follow_speed: float = 60.0
+## Frame-rate independent follow speed toward target (1/s). Default 12.0.
+@export var sun_follow_speed: float = 12.0
 ## Within this many degrees of the target the sun snaps onto it and stops ticking.
-@export var settle_threshold: float = 0.25
+@export var settle_threshold: float = 0.15
 ## Binary-search steps used to find the last safe angle when the guard refuses a step.
-@export var guard_search_steps: int = 6
+@export var guard_search_steps: int = 8
+## Hysteresis margin in degrees: once blocked, target must re-enter safe zone by this much before unblocking.
+@export var guard_hysteresis_margin: float = 0.5
 
 @export_group("Start")
 @export var start_azimuth: float = 0.0
@@ -55,9 +55,13 @@ var target_elevation: float = 45.0
 ## Callable(dir: Vector3) -> bool. Empty = no guard.
 var guard: Callable = Callable()
 
+var _is_guard_blocked: bool = false
+var _last_safe_azimuth: float = 0.0
+var _last_safe_elevation: float = 45.0
+
 func _ready() -> void:
-	# Update the light before anything that queries it this physics frame (ShadowSensor).
-	process_physics_priority = -10
+	process_priority = -50
+	set_physics_process(false)
 	snap_to(start_azimuth, start_elevation)
 
 ## Per-level setup: azimuth/elevation ranges and the starting angle.
@@ -83,9 +87,27 @@ func get_toward_sun() -> Vector3:
 	return direction_from_angles(azimuth, elevation)
 
 func set_target(azimuth_deg: float, elevation_deg: float) -> void:
-	target_azimuth = clampf(azimuth_deg, azimuth_min, azimuth_max)
-	target_elevation = clampf(elevation_deg, elevation_min, elevation_max)
-	set_physics_process(true)   # PDF §4: there is motion to integrate
+	var req_az := clampf(azimuth_deg, azimuth_min, azimuth_max)
+	var req_el := clampf(elevation_deg, elevation_min, elevation_max)
+
+	if _is_guard_blocked and guard.is_valid():
+		# If the requested target is still unsafe, keep target clamped at the last safe angle
+		if not _safe(req_az, req_el):
+			target_azimuth = _last_safe_azimuth
+			target_elevation = _last_safe_elevation
+			return
+		# Check hysteresis: has the target moved back into the safe zone by at least guard_hysteresis_margin?
+		var dist_to_safe_border := Vector2(req_az - _last_safe_azimuth, req_el - _last_safe_elevation).length()
+		if dist_to_safe_border < guard_hysteresis_margin:
+			target_azimuth = _last_safe_azimuth
+			target_elevation = _last_safe_elevation
+			return
+		# Re-entered safe zone by more than the hysteresis margin: unblock
+		_is_guard_blocked = false
+
+	target_azimuth = req_az
+	target_elevation = req_el
+	set_process(true)
 
 func nudge_target(d_azimuth: float, d_elevation: float) -> void:
 	set_target(target_azimuth + d_azimuth, target_elevation + d_elevation)
@@ -96,18 +118,38 @@ func snap_to(azimuth_deg: float, elevation_deg: float) -> void:
 	target_elevation = clampf(elevation_deg, elevation_min, elevation_max)
 	azimuth = target_azimuth
 	elevation = target_elevation
+	_last_safe_azimuth = azimuth
+	_last_safe_elevation = elevation
+	_is_guard_blocked = false
 	_apply()
-	set_physics_process(false)
+	set_process(false)
 
 func is_settled() -> bool:
-	return not is_physics_processing()
+	return not is_processing()
 
-func _physics_process(delta: float) -> void:
-	var blend := 1.0 - exp(-smoothing * delta)
-	var new_az := azimuth + _follow_step(target_azimuth - azimuth, blend, max_azimuth_speed, delta)
-	var new_el := elevation + _follow_step(target_elevation - elevation, blend, max_elevation_speed, delta)
+func _process(delta: float) -> void:
+	if delta <= 0.0:
+		return
+
+	var blend := 1.0 - exp(-sun_follow_speed * delta)
+
+	# Frame-rate independent smoothing via lerp_angle + max speed clamp
+	var az_rad := deg_to_rad(azimuth)
+	var tgt_az_rad := deg_to_rad(target_azimuth)
+	var step_az := rad_to_deg(lerp_angle(az_rad, tgt_az_rad, blend) - az_rad)
+	var max_step_az := max_azimuth_speed * delta
+	step_az = clampf(step_az, -max_step_az, max_step_az)
+	var new_az := azimuth + step_az
+
+	var el_rad := deg_to_rad(elevation)
+	var tgt_el_rad := deg_to_rad(target_elevation)
+	var step_el := rad_to_deg(lerp_angle(el_rad, tgt_el_rad, blend) - el_rad)
+	var max_step_el := max_elevation_speed * delta
+	step_el = clampf(step_el, -max_step_el, max_step_el)
+	var new_el := elevation + step_el
+
 	if guard.is_valid() and not _safe(new_az, new_el) and _safe(azimuth, elevation):
-		# Find the furthest safe angle between here and the refused step, then stop there.
+		# Find the furthest safe angle along the trajectory, clamp target, and hold with hysteresis
 		var lo := 0.0
 		var hi := 1.0
 		for _i in guard_search_steps:
@@ -116,34 +158,36 @@ func _physics_process(delta: float) -> void:
 				lo = mid
 			else:
 				hi = mid
-		azimuth = lerpf(azimuth, new_az, lo)
-		elevation = lerpf(elevation, new_el, lo)
-		target_azimuth = azimuth
-		target_elevation = elevation
+		var safe_az := lerpf(azimuth, new_az, lo)
+		var safe_el := lerpf(elevation, new_el, lo)
+		azimuth = safe_az
+		elevation = safe_el
+		target_azimuth = safe_az
+		target_elevation = safe_el
+		_last_safe_azimuth = safe_az
+		_last_safe_elevation = safe_el
+		_is_guard_blocked = true
 		_apply()
-		set_physics_process(false)
+		set_process(false)
 		guard_blocked.emit()
 		settled.emit()
 		return
+
 	azimuth = new_az
 	elevation = new_el
+
 	if absf(target_azimuth - azimuth) < settle_threshold and absf(target_elevation - elevation) < settle_threshold:
 		azimuth = target_azimuth
 		elevation = target_elevation
-		set_physics_process(false)   # PDF §4: at rest — stop ticking
+		set_process(false)
 		_apply()
 		settled.emit()
 		return
+
 	_apply()
 
 func _safe(az: float, el: float) -> bool:
 	return guard.call(direction_from_angles(az, el))
-
-## Smoothed step toward the target: exponential ease, never slower than
-## min_follow_speed (no lingering tail), never faster than max_speed, never overshooting.
-func _follow_step(diff: float, blend: float, max_speed: float, delta: float) -> float:
-	var mag := clampf(maxf(absf(diff) * blend, min_follow_speed * delta), 0.0, minf(absf(diff), max_speed * delta))
-	return signf(diff) * mag
 
 func _apply() -> void:
 	if light:

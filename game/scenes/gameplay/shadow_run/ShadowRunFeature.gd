@@ -690,6 +690,8 @@ func _on_sun_drag_ended() -> void:
 	if run_camera:
 		run_camera.set_planning_active(false)
 	_drag_dest = Vector2i(-1, -1)     # a move-drag still held resumes once shade is exact
+	if level and level.grid:
+		level.grid.refresh_soon()
 	if sun_rig.is_settled():
 		_on_sun_settled()
 

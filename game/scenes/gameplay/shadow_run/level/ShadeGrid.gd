@@ -60,10 +60,10 @@ const CASTER_LAYER_BIT: int = 1 << 3   # project layer 4 "shadow_caster"
 ## Sun azimuth × elevation samples used at setup to find cells that can change shade.
 @export var mask_samples: int = 7
 @export var mask_elevation_samples: int = 3
-## Ray budget per physics frame for incremental re-casts.
-@export var rays_per_frame: int = 300
-## Ray budget per frame for the pass that runs when the sun settles.
-@export var settle_rays_per_frame: int = 1200
+## Ray budget per physics frame for incremental re-casts (batch size during drag).
+@export var rays_per_frame: int = 150
+## Ray budget per frame for the pass that runs when the sun settles or releases.
+@export var settle_rays_per_frame: int = 600
 ## Throttle for incremental passes while the sun is moving.
 @export var max_updates_per_second: float = 10.0
 
@@ -199,11 +199,16 @@ func _physics_process(delta: float) -> void:
 		_sweep_pos = 0
 		_budget = rays_per_frame
 		_sweep_dir = _sun.get_toward_sun()
+	var t0 := Time.get_ticks_usec()
 	var space := get_world_3d().direct_space_state
 	var end := mini(_sweep_pos + _budget, _variable.size())
 	for k in range(_sweep_pos, end):
 		var i := _variable[k]
 		_shaded[i] = 1 if _ray_shaded(space, i, _sweep_dir) else 0
+		# Hard time budget guard: cap raycasting at 2.5 ms so total frame time stays well below 16 ms
+		if (k & 15) == 0 and Time.get_ticks_usec() - t0 > 2500:
+			end = k + 1
+			break
 	_sweep_pos = end
 	if _sweep_pos >= _variable.size():
 		_sweep_pos = -1

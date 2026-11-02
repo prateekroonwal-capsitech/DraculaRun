@@ -57,6 +57,8 @@ var _aim: Vector2 = Vector2.ZERO          # last finger aim, dial-local px from 
 var _aim_visible_until: float = 0.0
 var _clock: float = 0.0
 var _fx_tween: Tween
+var _latest_viewport_pos: Vector2 = Vector2.ZERO
+var _has_input_update: bool = false
 
 func bind_sun(sun: SunRig) -> void:
 	if _sun and _sun.sun_moved.is_connected(_on_sun_moved):
@@ -91,6 +93,7 @@ func play_blocked() -> void:
 	_fx_tween.tween_method(_set_fx, 1.0, 0.0, shake_time)
 
 func _on_ready() -> void:
+	process_priority = -100 # Run before SunRig (-50) so target is fresh each frame
 	if left_handed:
 		anchor_left = 0.0
 		anchor_right = 0.0
@@ -100,7 +103,7 @@ func _on_ready() -> void:
 	target_marker.visible = false
 	ring.resized.connect(_place_parts)
 	_place_parts()
-	set_process(false)   # PDF §4: tick only while a key is held or the aim marker is shown
+	set_process(false)
 	set_process_input(true)
 
 func _exit_tree() -> void:
@@ -132,7 +135,9 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
 		if sd.index == _touch:
-			_aim_at(sd.position)
+			_latest_viewport_pos = sd.position
+			_has_input_update = true
+			set_process(true)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mb := event as InputEventMouseButton
@@ -141,7 +146,9 @@ func _input(event: InputEvent) -> void:
 		elif not mb.pressed and _touch == -1:
 			_let_go()
 	elif event is InputEventMouseMotion and _touch == -1:
-		_aim_at((event as InputEventMouseMotion).position)
+		_latest_viewport_pos = (event as InputEventMouseMotion).position
+		_has_input_update = true
+		set_process(true)
 		get_viewport().set_input_as_handled()
 
 ## Test hooks: the same grab / move / release path a finger takes.
@@ -151,7 +158,9 @@ func press_at(viewport_pos: Vector2) -> void:
 
 func move_to(viewport_pos: Vector2) -> void:
 	if _touch != -99:
-		_aim_at(viewport_pos)
+		_latest_viewport_pos = viewport_pos
+		_has_input_update = true
+		set_process(true)
 
 func release() -> void:
 	if _touch != -99:
@@ -168,13 +177,22 @@ func knob_center_global() -> Vector2:
 func _grab(index: int, viewport_pos: Vector2) -> void:
 	var first := not is_dragging()
 	_touch = index
+	_latest_viewport_pos = viewport_pos
+	_has_input_update = true
 	get_viewport().set_input_as_handled()
 	if first:
 		drag_started.emit()
-	_aim_at(viewport_pos)
+	set_process(true)
+	# Compute initial aim immediately for snappy feedback
+	var r := ring.radius()
+	_aim = _to_ring(viewport_pos).limit_length(r)
+	var a := _ring_to_angles(_aim)
+	_sun.set_target(a.x, a.y)
+	_place_parts()
 
 func _let_go() -> void:
 	_touch = -99
+	_has_input_update = false
 	get_viewport().set_input_as_handled()
 	_place_parts()
 	if not _key_dragging:
@@ -182,6 +200,8 @@ func _let_go() -> void:
 
 ## Finger → target angle (absolute: the sun goes where the finger points).
 func _aim_at(viewport_pos: Vector2) -> void:
+	_latest_viewport_pos = viewport_pos
+	_has_input_update = true
 	var r := ring.radius()
 	_aim = _to_ring(viewport_pos).limit_length(r)
 	var a := _ring_to_angles(_aim)
@@ -196,6 +216,15 @@ func _process(delta: float) -> void:
 	if _sun == null:
 		set_process(false)
 		return
+
+	# 1. Update target angle from latest touch
+	if _touch != -99:
+		var r := ring.radius()
+		_aim = _to_ring(_latest_viewport_pos).limit_length(r)
+		var a := _ring_to_angles(_aim)
+		_sun.set_target(a.x, a.y)
+
+	# 2. Update target angle from keys
 	var d_az := Input.get_axis("sun_left", "sun_right") * key_azimuth_speed * delta
 	var d_el := Input.get_axis("sun_down", "sun_up") * key_elevation_speed * delta
 	if _key_dragging and is_zero_approx(d_az) and is_zero_approx(d_el):
@@ -204,9 +233,13 @@ func _process(delta: float) -> void:
 			drag_ended.emit()
 	if _key_dragging:
 		_sun.nudge_target(d_az, d_el)
+		_aim = _angles_to_ring(_sun.target_azimuth, _sun.target_elevation)
+
+	# 3. Position parts (knob displays live sun angle; marker displays finger/key target)
 	_place_parts()
+
 	if not is_dragging() and _clock >= _aim_visible_until and _sun.is_settled():
-		set_process(false)   # PDF §4: nothing left to animate
+		set_process(false)
 
 func _on_sun_moved(_az: float, _el: float) -> void:
 	_place_parts()
@@ -253,7 +286,7 @@ func _place_parts() -> void:
 	var c := ring.position + ring.size * 0.5
 	knob.position = c + _angles_to_ring(_sun.azimuth, _sun.elevation) - knob.size * 0.5
 	# Dim marker: where the finger aims while the sun catches up (or a refused angle).
-	var aiming := _touch != -99 or _clock < _aim_visible_until
+	var aiming := _touch != -99 or _key_dragging or _clock < _aim_visible_until
 	var aim_pos := c + _aim - target_marker.size * 0.5
 	target_marker.position = aim_pos
 	target_marker.visible = aiming and aim_pos.distance_to(knob.position + (knob.size - target_marker.size) * 0.5) > 6.0
@@ -264,4 +297,7 @@ func _set_fx(k: float) -> void:
 
 ## Viewport position → offset from the ring centre in dial-local px.
 func _to_ring(viewport_pos: Vector2) -> Vector2:
-	return ring.get_global_transform_with_canvas().affine_inverse() * viewport_pos - ring.size * 0.5
+	# Use self transform so body shaking does not introduce an aim feedback loop
+	var local: Vector2 = get_global_transform_with_canvas().affine_inverse() * viewport_pos
+	var ring_center := size * 0.5
+	return local - ring_center

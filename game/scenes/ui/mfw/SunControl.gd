@@ -106,7 +106,9 @@ func play_blocked() -> void:
 	_fx_tween.tween_method(_set_fx, 1.0, 0.0, shake_time)
 
 func _on_ready() -> void:
+	process_priority = -100 # Run before SunRig (-50)
 	set_process_input(true)
+	set_process(false)
 
 func _exit_tree() -> void:
 	bind_sun(null)
@@ -122,7 +124,7 @@ func _input(event: InputEvent) -> void:
 				_key_dragging = true
 				if _owned_touches.is_empty():
 					drag_started.emit()
-			set_process(true)   # PDF §4: tick only while a sun key may be held
+			set_process(true)
 		return
 	# Ignore mouse<->touch emulation duplicates; real touch and real mouse are handled below.
 	if event.device == InputEvent.DEVICE_ID_EMULATION:
@@ -149,43 +151,69 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	if _sun == null:
+		set_process(false)
+		return
+
+	# 1. Update target from active touch drags
+	for index in _owned_touches.keys():
+		var grab: Dictionary = _owned_touches[index]
+		if grab.has("current_pos"):
+			var p := _to_local(grab.current_pos as Vector2)
+			var d: Vector2 = p - (grab.pos as Vector2)
+			var span_x := maxf(1.0, size.x - 2.0 * side_margin)
+			var span_y := maxf(1.0, size.y * elevation_drag_span)
+			var az: float = grab.az + d.x / span_x * (_sun.azimuth_max - _sun.azimuth_min) * drag_sensitivity
+			var el: float = grab.el - d.y / span_y * (_sun.elevation_max - _sun.elevation_min) * drag_sensitivity
+			_sun.set_target(az, el)
+			# Clamped at a limit: re-anchor so reversing direction responds immediately.
+			if not is_equal_approx(_sun.target_azimuth, az) or not is_equal_approx(_sun.target_elevation, el):
+				_owned_touches[index] = {
+					"pos": p,
+					"current_pos": grab.current_pos,
+					"az": _sun.target_azimuth,
+					"el": _sun.target_elevation
+				}
+
+	# 2. Update target from keys
 	var d_az := Input.get_axis("sun_left", "sun_right") * key_azimuth_speed * delta
 	var d_el := Input.get_axis("sun_down", "sun_up") * key_elevation_speed * delta
-	if is_zero_approx(d_az) and is_zero_approx(d_el):
-		set_process(false)   # PDF §4: no key held — stop ticking
-		if _key_dragging:
-			_key_dragging = false
-			if _owned_touches.is_empty():
-				drag_ended.emit()
-		return
-	_sun.nudge_target(d_az, d_el)
+	if _key_dragging and is_zero_approx(d_az) and is_zero_approx(d_el):
+		_key_dragging = false
+		if _owned_touches.is_empty():
+			drag_ended.emit()
+	if _key_dragging:
+		_sun.nudge_target(d_az, d_el)
+
 	queue_redraw()
+
+	if _owned_touches.is_empty() and not _key_dragging and _sun.is_settled():
+		set_process(false)
 
 func _begin_drag(index: int, viewport_pos: Vector2) -> void:
 	var first := _owned_touches.is_empty() and not _key_dragging
-	_owned_touches[index] = {"pos": _to_local(viewport_pos), "az": _sun.target_azimuth, "el": _sun.target_elevation}
+	_owned_touches[index] = {
+		"pos": _to_local(viewport_pos),
+		"current_pos": viewport_pos,
+		"az": _sun.target_azimuth,
+		"el": _sun.target_elevation
+	}
 	get_viewport().set_input_as_handled()
 	if first:
 		drag_started.emit()
+	set_process(true)
 
 func _end_drag(index: int) -> void:
 	_owned_touches.erase(index)
 	get_viewport().set_input_as_handled()
+	queue_redraw()
 	if _owned_touches.is_empty() and not _key_dragging:
 		drag_ended.emit()
 
 func _drag_to(index: int, viewport_pos: Vector2) -> void:
-	var grab: Dictionary = _owned_touches[index]
-	var p := _to_local(viewport_pos)
-	var d: Vector2 = p - (grab.pos as Vector2)
-	var span_x := maxf(1.0, size.x - 2.0 * side_margin)
-	var span_y := maxf(1.0, size.y * elevation_drag_span)
-	var az: float = grab.az + d.x / span_x * (_sun.azimuth_max - _sun.azimuth_min) * drag_sensitivity
-	var el: float = grab.el - d.y / span_y * (_sun.elevation_max - _sun.elevation_min) * drag_sensitivity
-	_sun.set_target(az, el)
-	# Clamped at a limit: re-anchor so reversing direction responds immediately.
-	if not is_equal_approx(_sun.target_azimuth, az) or not is_equal_approx(_sun.target_elevation, el):
-		_owned_touches[index] = {"pos": p, "az": _sun.target_azimuth, "el": _sun.target_elevation}
+	if _owned_touches.has(index):
+		_owned_touches[index]["current_pos"] = viewport_pos
+		set_process(true)
 	queue_redraw()
 
 # ── Geometry ──────────────────────────────────────────────────────────────
